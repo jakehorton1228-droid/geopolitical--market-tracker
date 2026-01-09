@@ -2,8 +2,10 @@
 Home Page - Dashboard Overview.
 
 Shows key metrics and recent activity at a glance.
+Supports both direct DB access and API mode.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -16,10 +18,17 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 
-from src.db.connection import get_session
-from src.db.models import Event, MarketData, AnalysisResult
 from src.config.constants import CAMEO_CATEGORIES, get_event_group
-from sqlalchemy import func
+
+# Check mode
+USE_API = os.getenv("USE_API", "false").lower() == "true"
+
+if USE_API:
+    from dashboard.api_client import get_client
+else:
+    from src.db.connection import get_session
+    from src.db.models import Event, MarketData, AnalysisResult
+    from sqlalchemy import func
 
 
 def render():
@@ -33,28 +42,34 @@ def render():
     )
 
     # Key metrics row
-    with get_session() as session:
-        # Count events
-        event_count = session.query(func.count(Event.id)).filter(
-            Event.event_date >= start_date,
-            Event.event_date <= end_date,
-        ).scalar() or 0
+    if USE_API:
+        client = get_client()
+        event_count = client.get_events_count(start_date, end_date)
+        # API doesn't have market count endpoint, estimate from symbols
+        symbols_info = client.get_symbols()
+        market_count = symbols_info.get("total", 0) * 30  # Rough estimate
+        summary = client.get_analysis_summary()
+        significant_count = summary.get("significant_results", 0)
+        anomaly_count = summary.get("total_anomalies", 0)
+    else:
+        with get_session() as session:
+            event_count = session.query(func.count(Event.id)).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+            ).scalar() or 0
 
-        # Count market data points
-        market_count = session.query(func.count(MarketData.id)).filter(
-            MarketData.date >= start_date,
-            MarketData.date <= end_date,
-        ).scalar() or 0
+            market_count = session.query(func.count(MarketData.id)).filter(
+                MarketData.date >= start_date,
+                MarketData.date <= end_date,
+            ).scalar() or 0
 
-        # Count significant analysis results
-        significant_count = session.query(func.count(AnalysisResult.id)).filter(
-            AnalysisResult.is_significant == True,
-        ).scalar() or 0
+            significant_count = session.query(func.count(AnalysisResult.id)).filter(
+                AnalysisResult.is_significant == True,
+            ).scalar() or 0
 
-        # Count anomalies
-        anomaly_count = session.query(func.count(AnalysisResult.id)).filter(
-            AnalysisResult.is_anomaly == True,
-        ).scalar() or 0
+            anomaly_count = session.query(func.count(AnalysisResult.id)).filter(
+                AnalysisResult.is_anomaly == True,
+            ).scalar() or 0
 
     # Display metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -111,27 +126,35 @@ def render_events_by_type_chart(start_date: date, end_date: date):
     """Render bar chart of events by CAMEO category."""
     import plotly.express as px
 
-    with get_session() as session:
-        results = session.query(
-            Event.event_root_code,
-            func.count(Event.id).label("count"),
-        ).filter(
-            Event.event_date >= start_date,
-            Event.event_date <= end_date,
-        ).group_by(
-            Event.event_root_code,
-        ).all()
+    if USE_API:
+        client = get_client()
+        results = client.get_events_by_type(start_date, end_date)
+        if not results:
+            st.info("No events found in this date range.")
+            return
+        df = pd.DataFrame(results)
+        df = df.rename(columns={"code": "code", "name": "category", "group": "group", "count": "count"})
+    else:
+        with get_session() as session:
+            results = session.query(
+                Event.event_root_code,
+                func.count(Event.id).label("count"),
+            ).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+            ).group_by(
+                Event.event_root_code,
+            ).all()
 
-    if not results:
-        st.info("No events found in this date range.")
-        return
+        if not results:
+            st.info("No events found in this date range.")
+            return
 
-    # Convert to DataFrame and add category names
-    df = pd.DataFrame(results, columns=["code", "count"])
-    df["category"] = df["code"].apply(
-        lambda x: CAMEO_CATEGORIES.get(str(x).zfill(2), "Unknown")
-    )
-    df["group"] = df["code"].apply(get_event_group)
+        df = pd.DataFrame(results, columns=["code", "count"])
+        df["category"] = df["code"].apply(
+            lambda x: CAMEO_CATEGORIES.get(str(x).zfill(2), "Unknown")
+        )
+        df["group"] = df["code"].apply(get_event_group)
 
     # Color by group
     color_map = {
@@ -166,26 +189,35 @@ def render_events_by_country_chart(start_date: date, end_date: date):
     """Render bar chart of events by country."""
     import plotly.express as px
 
-    with get_session() as session:
-        results = session.query(
-            Event.action_geo_country_code,
-            func.count(Event.id).label("count"),
-        ).filter(
-            Event.event_date >= start_date,
-            Event.event_date <= end_date,
-            Event.action_geo_country_code.isnot(None),
-            Event.action_geo_country_code != "",
-        ).group_by(
-            Event.action_geo_country_code,
-        ).order_by(
-            func.count(Event.id).desc(),
-        ).limit(15).all()
+    if USE_API:
+        client = get_client()
+        results = client.get_events_by_country(start_date, end_date, limit=15)
+        if not results:
+            st.info("No events with location data found.")
+            return
+        df = pd.DataFrame(results)
+        df = df.rename(columns={"country_code": "country", "count": "count"})
+    else:
+        with get_session() as session:
+            results = session.query(
+                Event.action_geo_country_code,
+                func.count(Event.id).label("count"),
+            ).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+                Event.action_geo_country_code.isnot(None),
+                Event.action_geo_country_code != "",
+            ).group_by(
+                Event.action_geo_country_code,
+            ).order_by(
+                func.count(Event.id).desc(),
+            ).limit(15).all()
 
-    if not results:
-        st.info("No events with location data found.")
-        return
+        if not results:
+            st.info("No events with location data found.")
+            return
 
-    df = pd.DataFrame(results, columns=["country", "count"])
+        df = pd.DataFrame(results, columns=["country", "count"])
 
     fig = px.bar(
         df.sort_values("count", ascending=True),
@@ -208,36 +240,58 @@ def render_events_by_country_chart(start_date: date, end_date: date):
 
 def render_recent_events_table(start_date: date, end_date: date, limit: int = 20):
     """Render table of recent significant events."""
-    with get_session() as session:
-        events = session.query(Event).filter(
-            Event.event_date >= start_date,
-            Event.event_date <= end_date,
-            Event.num_mentions >= 10,  # Significant coverage
-        ).order_by(
-            Event.event_date.desc(),
-            Event.num_mentions.desc(),
-        ).limit(limit).all()
+    if USE_API:
+        client = get_client()
+        events = client.get_events(
+            start_date=start_date,
+            end_date=end_date,
+            min_mentions=10,
+            limit=limit,
+        )
+        if not events:
+            st.info("No significant events found in this date range. Try ingesting more data.")
+            return
 
-    if not events:
-        st.info("No significant events found in this date range. Try ingesting more data.")
-        return
+        rows = []
+        for e in events:
+            rows.append({
+                "Date": e.get("event_date"),
+                "Type": CAMEO_CATEGORIES.get(str(e.get("event_root_code", "")).zfill(2), e.get("event_root_code")),
+                "Actor 1": e.get("actor1_name") or e.get("actor1_code") or "-",
+                "Actor 2": e.get("actor2_name") or e.get("actor2_code") or "-",
+                "Location": e.get("action_geo_name") or e.get("action_geo_country_code") or "-",
+                "Goldstein": e.get("goldstein_scale") or 0,
+                "Mentions": e.get("num_mentions") or 0,
+            })
+    else:
+        with get_session() as session:
+            events = session.query(Event).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+                Event.num_mentions >= 10,
+            ).order_by(
+                Event.event_date.desc(),
+                Event.num_mentions.desc(),
+            ).limit(limit).all()
 
-    # Convert to DataFrame for display
-    rows = []
-    for e in events:
-        rows.append({
-            "Date": e.event_date,
-            "Type": CAMEO_CATEGORIES.get(str(e.event_root_code).zfill(2), e.event_root_code),
-            "Actor 1": e.actor1_name or e.actor1_code or "-",
-            "Actor 2": e.actor2_name or e.actor2_code or "-",
-            "Location": e.action_geo_name or e.action_geo_country_code or "-",
-            "Goldstein": e.goldstein_scale or 0,
-            "Mentions": e.num_mentions or 0,
-        })
+        if not events:
+            st.info("No significant events found in this date range. Try ingesting more data.")
+            return
+
+        rows = []
+        for e in events:
+            rows.append({
+                "Date": e.event_date,
+                "Type": CAMEO_CATEGORIES.get(str(e.event_root_code).zfill(2), e.event_root_code),
+                "Actor 1": e.actor1_name or e.actor1_code or "-",
+                "Actor 2": e.actor2_name or e.actor2_code or "-",
+                "Location": e.action_geo_name or e.action_geo_country_code or "-",
+                "Goldstein": e.goldstein_scale or 0,
+                "Mentions": e.num_mentions or 0,
+            })
 
     df = pd.DataFrame(rows)
 
-    # Style the Goldstein column
     st.dataframe(
         df,
         column_config={

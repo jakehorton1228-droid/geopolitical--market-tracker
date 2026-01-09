@@ -2,8 +2,10 @@
 Event Map Page - Geographic Visualization.
 
 Shows events on an interactive world map using Folium.
+Supports both direct DB access and API mode.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,10 +20,17 @@ import folium
 from streamlit_folium import st_folium
 from datetime import date, timedelta
 
-from src.db.connection import get_session
-from src.db.models import Event
-from src.config.constants import CAMEO_CATEGORIES, get_event_group
-from sqlalchemy import func
+from src.config.constants import CAMEO_CATEGORIES, get_event_group, EVENT_GROUPS
+
+# Check mode
+USE_API = os.getenv("USE_API", "false").lower() == "true"
+
+if USE_API:
+    from dashboard.api_client import get_client
+else:
+    from src.db.connection import get_session
+    from src.db.models import Event
+    from sqlalchemy import func
 
 
 def render():
@@ -97,56 +106,103 @@ def fetch_events_with_location(
     limit: int = 500,
 ) -> pd.DataFrame:
     """Fetch events that have lat/long coordinates."""
-    from src.config.constants import EVENT_GROUPS
 
-    with get_session() as session:
-        query = session.query(Event).filter(
-            Event.event_date >= start_date,
-            Event.event_date <= end_date,
-            Event.action_geo_lat.isnot(None),
-            Event.action_geo_long.isnot(None),
-            Event.num_mentions >= min_mentions,
+    if USE_API:
+        client = get_client()
+        # Build event group filter
+        event_group_param = event_groups[0] if event_groups and len(event_groups) == 1 else None
+
+        events = client.get_events(
+            start_date=start_date,
+            end_date=end_date,
+            min_mentions=min_mentions,
+            event_group=event_group_param,
+            country_code=country_code,
+            limit=limit,
         )
 
-        # Filter by event groups
-        if event_groups:
+        # Filter to events with location
+        events = [e for e in events if e.get("action_geo_lat") and e.get("action_geo_long")]
+
+        # Filter by event groups if multiple selected
+        if event_groups and len(event_groups) > 1:
             codes = []
             for group in event_groups:
                 codes.extend(EVENT_GROUPS.get(group, []))
-            if codes:
-                query = query.filter(Event.event_root_code.in_(codes))
+            events = [e for e in events if e.get("event_root_code") in codes]
 
-        # Filter by country
-        if country_code:
-            query = query.filter(Event.action_geo_country_code == country_code)
+        if not events:
+            return pd.DataFrame()
 
-        events = query.order_by(
-            Event.num_mentions.desc(),
-        ).limit(limit).all()
+        rows = []
+        for e in events:
+            rows.append({
+                "id": e.get("id"),
+                "date": e.get("event_date"),
+                "lat": e.get("action_geo_lat"),
+                "lon": e.get("action_geo_long"),
+                "location": e.get("action_geo_name") or e.get("action_geo_country_code"),
+                "country": e.get("action_geo_country_code"),
+                "event_code": e.get("event_root_code"),
+                "event_type": CAMEO_CATEGORIES.get(str(e.get("event_root_code", "")).zfill(2), "Unknown"),
+                "event_group": get_event_group(e.get("event_root_code", "")),
+                "actor1": e.get("actor1_name") or e.get("actor1_code") or "-",
+                "actor2": e.get("actor2_name") or e.get("actor2_code") or "-",
+                "goldstein": e.get("goldstein_scale") or 0,
+                "mentions": e.get("num_mentions") or 0,
+                "source_url": e.get("source_url"),
+            })
+        return pd.DataFrame(rows)
 
-    if not events:
-        return pd.DataFrame()
+    else:
+        with get_session() as session:
+            query = session.query(Event).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+                Event.action_geo_lat.isnot(None),
+                Event.action_geo_long.isnot(None),
+                Event.num_mentions >= min_mentions,
+            )
 
-    rows = []
-    for e in events:
-        rows.append({
-            "id": e.id,
-            "date": e.event_date,
-            "lat": e.action_geo_lat,
-            "lon": e.action_geo_long,
-            "location": e.action_geo_name or e.action_geo_country_code,
-            "country": e.action_geo_country_code,
-            "event_code": e.event_root_code,
-            "event_type": CAMEO_CATEGORIES.get(str(e.event_root_code).zfill(2), "Unknown"),
-            "event_group": get_event_group(e.event_root_code),
-            "actor1": e.actor1_name or e.actor1_code or "-",
-            "actor2": e.actor2_name or e.actor2_code or "-",
-            "goldstein": e.goldstein_scale or 0,
-            "mentions": e.num_mentions or 0,
-            "source_url": e.source_url,
-        })
+            # Filter by event groups
+            if event_groups:
+                codes = []
+                for group in event_groups:
+                    codes.extend(EVENT_GROUPS.get(group, []))
+                if codes:
+                    query = query.filter(Event.event_root_code.in_(codes))
 
-    return pd.DataFrame(rows)
+            # Filter by country
+            if country_code:
+                query = query.filter(Event.action_geo_country_code == country_code)
+
+            events = query.order_by(
+                Event.num_mentions.desc(),
+            ).limit(limit).all()
+
+        if not events:
+            return pd.DataFrame()
+
+        rows = []
+        for e in events:
+            rows.append({
+                "id": e.id,
+                "date": e.event_date,
+                "lat": e.action_geo_lat,
+                "lon": e.action_geo_long,
+                "location": e.action_geo_name or e.action_geo_country_code,
+                "country": e.action_geo_country_code,
+                "event_code": e.event_root_code,
+                "event_type": CAMEO_CATEGORIES.get(str(e.event_root_code).zfill(2), "Unknown"),
+                "event_group": get_event_group(e.event_root_code),
+                "actor1": e.actor1_name or e.actor1_code or "-",
+                "actor2": e.actor2_name or e.actor2_code or "-",
+                "goldstein": e.goldstein_scale or 0,
+                "mentions": e.num_mentions or 0,
+                "source_url": e.source_url,
+            })
+
+        return pd.DataFrame(rows)
 
 
 def render_folium_map(events_df: pd.DataFrame):

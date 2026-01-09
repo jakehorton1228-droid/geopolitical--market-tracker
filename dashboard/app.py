@@ -5,7 +5,11 @@ Main entry point for the Streamlit dashboard.
 
 USAGE:
 ------
+    # Local development (direct DB access)
     streamlit run dashboard/app.py
+
+    # Containerized (via API)
+    USE_API=true API_URL=http://api:8000 streamlit run dashboard/app.py
 
 This dashboard provides:
 1. Home - Overview of recent events and market moves
@@ -13,8 +17,14 @@ This dashboard provides:
 3. Market Analysis - Event study results and market reactions
 4. Anomalies - Detected anomalies (unexplained moves, muted responses)
 5. Predictions - Classification model predictions for market direction
+
+ENVIRONMENT VARIABLES:
+----------------------
+    USE_API: Set to "true" to use API instead of direct DB (default: false)
+    API_URL: API base URL when USE_API=true (default: http://localhost:8000)
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -25,6 +35,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 from datetime import date, timedelta
+
+# Determine data access mode
+USE_API = os.getenv("USE_API", "false").lower() == "true"
 
 # Page configuration - must be first Streamlit command
 st.set_page_config(
@@ -86,6 +99,13 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.caption("Built with Streamlit + Python")
     st.sidebar.caption("Data: GDELT + Yahoo Finance")
+
+    # Show data access mode
+    if USE_API:
+        api_url = os.getenv("API_URL", "http://localhost:8000")
+        st.sidebar.caption(f"Mode: API ({api_url})")
+    else:
+        st.sidebar.caption("Mode: Direct DB")
 
     # Route to selected page
     if page == "🏠 Home":
