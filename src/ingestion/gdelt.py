@@ -12,7 +12,7 @@ containing all detected events.
 
 DATA FORMAT:
 -----------
-GDELT files are tab-separated with 58 columns. Key columns include:
+GDELT files are tab-separated with 61 columns. Key columns include:
 - GlobalEventID: Unique identifier for the event
 - Actor1/Actor2: The parties involved (countries, organizations, etc.)
 - EventCode: CAMEO code describing the type of action (01-20)
@@ -85,25 +85,29 @@ GDELT_COLUMNS = {
     "SOURCEURL": 57,
 }
 
-# Full list of all 58 column names for pandas
+# Full list of all 58 column names for pandas (GDELT 1.0 format)
+# Reference: https://www.gdeltproject.org/data/lookups/CSV.header.dailyupdates.txt
 ALL_COLUMN_NAMES = [
-    "GlobalEventID", "Day", "MonthYear", "Year", "FractionDate",
-    "Actor1Code", "Actor1Name", "Actor1CountryCode", "Actor1KnownGroupCode",
-    "Actor1EthnicCode", "Actor1Religion1Code", "Actor1Religion2Code",
-    "Actor1Type1Code", "Actor1Type2Code", "Actor1Type3Code",
-    "Actor2Code", "Actor2Name", "Actor2CountryCode", "Actor2KnownGroupCode",
-    "Actor2EthnicCode", "Actor2Religion1Code", "Actor2Religion2Code",
-    "Actor2Type1Code", "Actor2Type2Code", "Actor2Type3Code",
-    "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode",
-    "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles",
-    "AvgTone", "Actor1Geo_Type", "Actor1Geo_FullName", "Actor1Geo_CountryCode",
-    "Actor1Geo_ADM1Code", "Actor1Geo_ADM2Code", "Actor1Geo_Lat", "Actor1Geo_Long",
-    "Actor1Geo_FeatureID", "Actor2Geo_Type", "Actor2Geo_FullName",
-    "Actor2Geo_CountryCode", "Actor2Geo_ADM1Code", "Actor2Geo_ADM2Code",
-    "Actor2Geo_Lat", "Actor2Geo_Long", "Actor2Geo_FeatureID",
-    "ActionGeo_Type", "ActionGeo_FullName", "ActionGeo_CountryCode",
-    "ActionGeo_ADM1Code", "ActionGeo_ADM2Code", "ActionGeo_Lat", "ActionGeo_Long",
-    "DATEADDED", "SOURCEURL",
+    "GlobalEventID", "Day", "MonthYear", "Year", "FractionDate",           # 0-4
+    "Actor1Code", "Actor1Name", "Actor1CountryCode", "Actor1KnownGroupCode", # 5-8
+    "Actor1EthnicCode", "Actor1Religion1Code", "Actor1Religion2Code",       # 9-11
+    "Actor1Type1Code", "Actor1Type2Code", "Actor1Type3Code",                # 12-14
+    "Actor2Code", "Actor2Name", "Actor2CountryCode", "Actor2KnownGroupCode", # 15-18
+    "Actor2EthnicCode", "Actor2Religion1Code", "Actor2Religion2Code",       # 19-21
+    "Actor2Type1Code", "Actor2Type2Code", "Actor2Type3Code",                # 22-24
+    "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode",           # 25-28
+    "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", # 29-33
+    "AvgTone",                                                               # 34
+    "Actor1Geo_Type", "Actor1Geo_FullName", "Actor1Geo_CountryCode",        # 35-37
+    "Actor1Geo_ADM1Code", "Actor1Geo_Lat", "Actor1Geo_Long",                # 38-40
+    "Actor1Geo_FeatureID",                                                   # 41
+    "Actor2Geo_Type", "Actor2Geo_FullName", "Actor2Geo_CountryCode",        # 42-44
+    "Actor2Geo_ADM1Code", "Actor2Geo_Lat", "Actor2Geo_Long",                # 45-47
+    "Actor2Geo_FeatureID",                                                   # 48
+    "ActionGeo_Type", "ActionGeo_FullName", "ActionGeo_CountryCode",        # 49-51
+    "ActionGeo_ADM1Code", "ActionGeo_Lat", "ActionGeo_Long",                # 52-54
+    "ActionGeo_FeatureID",                                                   # 55
+    "DATEADDED", "SOURCEURL",                                                # 56-57
 ]
 
 
