@@ -43,8 +43,7 @@ This system answers questions like:
 
 ### Prerequisites
 - Python 3.10+
-- PostgreSQL 15+
-- Docker & Docker Compose (optional)
+- Docker & Docker Compose
 
 ### Quick Start
 
@@ -61,20 +60,48 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables
+3. Create `.env` file
 ```bash
-cp .env.example .env
-# Edit .env with your database credentials
+cat <<EOF > .env
+# Database
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=geopolitical_tracker
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geopolitical_tracker
+
+# Prefect
+PREFECT_API_URL=http://localhost:4200/api
+EOF
 ```
 
-4. Start the database (Docker)
+4. Start the database
 ```bash
-docker-compose up -d db
+docker compose up -d db
 ```
 
-5. Initialize the database
+5. Run migrations
+```bash
+alembic upgrade head
+```
+
+6. Verify database connection
 ```bash
 python scripts/setup_db.py
+```
+
+7. Ingest data
+```bash
+python -c "
+from datetime import date, timedelta
+from src.ingestion.gdelt import GDELTIngestion
+from src.ingestion.market_data import MarketDataIngestion
+
+# Ingest GDELT events (last 7 days)
+GDELTIngestion().ingest_date_range(date.today() - timedelta(days=7), date.today() - timedelta(days=1))
+
+# Ingest market data (last 30 days)
+MarketDataIngestion().ingest_all_symbols(date.today() - timedelta(days=30), date.today())
+"
 ```
 
 ## Project Structure

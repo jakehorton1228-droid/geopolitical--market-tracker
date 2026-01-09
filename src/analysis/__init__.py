@@ -87,6 +87,24 @@ from src.analysis.production_event_study import (
     ProdEventStudyResult,
     run_quick_event_study,
 )
+from src.analysis.production_anomaly import (
+    ProductionAnomalyDetector,
+    ProdAnomaly,
+    AnomalyReport,
+    run_quick_anomaly_detection,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOGGING UTILITIES
+# ═══════════════════════════════════════════════════════════════════════════════
+from src.analysis.logging_config import (
+    setup_logging,
+    setup_debug_logging,
+    setup_quiet_logging,
+    setup_file_logging,
+    get_analysis_logger,
+    AnalysisTimer,
+)
 
 __all__ = [
     # ═══════════════════════════════════════════════════════════════════════════
@@ -96,7 +114,7 @@ __all__ = [
     "EventStudy",
     "EventStudyResult",
     "explain_result",
-    # Anomaly Detection
+    # Anomaly Detection (learning)
     "AnomalyDetector",
     "Anomaly",
     "explain_anomaly",
@@ -124,4 +142,18 @@ __all__ = [
     "ProductionClassifier",
     "ProdClassificationResult",
     "ProdModelMetrics",
+    # Anomaly Detection (production)
+    "ProductionAnomalyDetector",
+    "ProdAnomaly",
+    "AnomalyReport",
+    "run_quick_anomaly_detection",
+    # ═══════════════════════════════════════════════════════════════════════════
+    # LOGGING UTILITIES
+    # ═══════════════════════════════════════════════════════════════════════════
+    "setup_logging",
+    "setup_debug_logging",
+    "setup_quiet_logging",
+    "setup_file_logging",
+    "get_analysis_logger",
+    "AnalysisTimer",
 ]
