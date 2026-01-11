@@ -20,15 +20,17 @@
 #
 # SERVICES:
 # ---------
-#   - db:        PostgreSQL database (port 5432)
-#   - api:       FastAPI REST API (port 8000)
-#   - dashboard: Streamlit dashboard (port 8501)
+#   - db:             PostgreSQL database (port 5432)
+#   - api:            FastAPI REST API (port 8000)
+#   - dashboard:      Streamlit dashboard (port 8501)
+#   - prefect-server: Prefect orchestration UI (port 4200)
+#   - prefect-worker: Executes scheduled flows
 #
 # ACCESS:
 # -------
-#   - Dashboard:  http://localhost:8501
-#   - API Docs:   http://localhost:8000/docs
-#   - API Health: http://localhost:8000/health
+#   - Dashboard:   http://localhost:8501
+#   - API Docs:    http://localhost:8000/docs
+#   - Prefect UI:  http://localhost:4200
 
 services:
   # ===========================================================================
@@ -112,6 +114,100 @@ services:
     profiles:
       - setup  # Only run with: docker compose --profile setup up migrate
 
+  # ===========================================================================
+  # PREFECT SERVER (Orchestration UI)
+  # ===========================================================================
+  prefect-server:
+    image: prefecthq/prefect:2-python3.12
+    container_name: gmt-prefect-server
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+    environment:
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////root/.prefect/prefect.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - prefect  # Only start with: docker compose --profile prefect up -d
+
+  # ===========================================================================
+  # PREFECT WORKER (Executes Flows)
+  # ===========================================================================
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: gmt-prefect-worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PYTHONPATH: /app
+    depends_on:
+      db:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - prefect  # Only start with: docker compose --profile prefect up -d
+
+  # ===========================================================================
+  # PREFECT DEPLOY (Register deployments, then exit)
+  # ===========================================================================
+  prefect-deploy:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: gmt-prefect-deploy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PYTHONPATH: /app
+    command: >
+      sh -c "
+        echo 'Waiting for Prefect server...' &&
+        sleep 5 &&
+        echo 'Creating deployments...' &&
+        python flows/daily_pipeline.py --deploy &&
+        python flows/ingest_events.py --deploy &&
+        python flows/ingest_market.py --deploy &&
+        python flows/run_analysis.py --deploy &&
+        echo 'Deployments created successfully!'
+      "
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    profiles:
+      - prefect-setup  # Only run with: docker compose --profile prefect-setup up prefect-deploy
+
+  # ===========================================================================
+  # PIPELINE RUNNER (Run pipeline once, then exit)
+  # ===========================================================================
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: gmt-pipeline
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
+      PYTHONPATH: /app
+    command: ["python", "flows/daily_pipeline.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - pipeline  # Only run with: docker compose --profile pipeline up pipeline
+
 volumes:
   pgdata:
     name: gmt-pgdata
+  prefect-data:
+    name: gmt-prefect-data

@@ -10,7 +10,8 @@
 
 .PHONY: help up down start stop restart logs build clean migrate \
         dev-api dev-dashboard dev test lint \
-        ingest-events ingest-market
+        ingest-events ingest-market \
+        prefect-server prefect-worker pipeline pipeline-deploy
 
 # Default target
 .DEFAULT_GOAL := help
@@ -40,8 +41,11 @@ help: ## Show this help message
 	@echo "$(GREEN)Data Commands:$(NC)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(ingest-)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 	@echo ""
+	@echo "$(GREEN)Prefect Commands:$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(prefect-|pipeline)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@echo ""
 	@echo "$(GREEN)Other Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '(up|down|start|stop|restart|logs|build|clean|migrate|dev-|ingest-)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '(up|down|start|stop|restart|logs|build|clean|migrate|dev-|ingest-|prefect-|pipeline)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
 # ============================================================================
@@ -198,3 +202,87 @@ setup: ## Full setup: install deps, start DB, run migrations
 	sleep 5
 	. venv/bin/activate && alembic upgrade head
 	@echo "$(GREEN)Setup complete! Run 'make up' to start all services.$(NC)"
+
+# ============================================================================
+# PREFECT ORCHESTRATION (Local - without Docker)
+# ============================================================================
+
+prefect-server: ## Start Prefect server locally (UI at http://localhost:4200)
+	@echo "$(BLUE)Starting Prefect server...$(NC)"
+	@echo "$(GREEN)Prefect UI will be available at: http://localhost:4200$(NC)"
+	. venv/bin/activate && prefect server start
+
+prefect-worker: ## Start Prefect worker locally
+	@echo "$(BLUE)Starting Prefect worker...$(NC)"
+	. venv/bin/activate && prefect worker start -p 'default-agent-pool'
+
+pipeline: ## Run the daily pipeline locally
+	@echo "$(BLUE)Running daily pipeline...$(NC)"
+	. venv/bin/activate && python flows/daily_pipeline.py
+	@echo "$(GREEN)Pipeline complete.$(NC)"
+
+pipeline-deploy: ## Create Prefect deployments locally
+	@echo "$(BLUE)Creating Prefect deployments...$(NC)"
+	. venv/bin/activate && python flows/daily_pipeline.py --deploy
+	. venv/bin/activate && python flows/ingest_events.py --deploy
+	. venv/bin/activate && python flows/ingest_market.py --deploy
+	. venv/bin/activate && python flows/run_analysis.py --deploy
+	@echo "$(GREEN)Deployments created!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  1. Start Prefect server:  make prefect-server"
+	@echo "  2. Start worker:          make prefect-worker"
+	@echo "  3. View UI:               http://localhost:4200"
+
+pipeline-events: ## Run only event ingestion flow locally
+	@echo "$(BLUE)Running event ingestion flow...$(NC)"
+	. venv/bin/activate && python flows/ingest_events.py --days 7
+
+pipeline-market: ## Run only market data ingestion flow locally
+	@echo "$(BLUE)Running market data ingestion flow...$(NC)"
+	. venv/bin/activate && python flows/ingest_market.py --days 30
+
+pipeline-analysis: ## Run only analysis flow locally
+	@echo "$(BLUE)Running analysis flow...$(NC)"
+	. venv/bin/activate && python flows/run_analysis.py --days 30
+
+# ============================================================================
+# PREFECT ORCHESTRATION (Docker - containerized)
+# ============================================================================
+
+up-prefect: ## Start Prefect server and worker in Docker
+	@echo "$(BLUE)Starting Prefect services...$(NC)"
+	docker compose --profile prefect up -d
+	@echo ""
+	@echo "$(GREEN)Prefect services started!$(NC)"
+	@echo "  Prefect UI: http://localhost:4200"
+	@echo ""
+	@echo "$(YELLOW)To create scheduled deployments, run:$(NC)"
+	@echo "  make prefect-deploy-docker"
+
+down-prefect: ## Stop Prefect services
+	@echo "$(YELLOW)Stopping Prefect services...$(NC)"
+	docker compose --profile prefect down
+	@echo "$(GREEN)Prefect services stopped.$(NC)"
+
+prefect-deploy-docker: ## Create Prefect deployments in Docker
+	@echo "$(BLUE)Creating Prefect deployments...$(NC)"
+	docker compose --profile prefect-setup up prefect-deploy
+	@echo "$(GREEN)Deployments created!$(NC)"
+
+pipeline-docker: ## Run daily pipeline in Docker (one-time)
+	@echo "$(BLUE)Running daily pipeline in Docker...$(NC)"
+	docker compose --profile pipeline up pipeline
+	@echo "$(GREEN)Pipeline complete.$(NC)"
+
+logs-prefect: ## View Prefect logs
+	docker compose --profile prefect logs -f prefect-server prefect-worker
+
+up-all: ## Start ALL services including Prefect
+	@echo "$(GREEN)Starting all services...$(NC)"
+	docker compose --profile prefect up -d
+	@echo ""
+	@echo "$(GREEN)All services started!$(NC)"
+	@echo "  Dashboard:  http://localhost:8501"
+	@echo "  API Docs:   http://localhost:8000/docs"
+	@echo "  Prefect UI: http://localhost:4200"
