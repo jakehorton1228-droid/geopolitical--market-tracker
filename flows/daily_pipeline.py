@@ -166,9 +166,9 @@ def daily_pipeline(
     skip_events: bool = False,
     skip_market: bool = False,
     skip_analysis: bool = False,
-    days_back_events: int = 1,
-    days_back_market: int = 5,
-    days_back_analysis: int = 7,
+    days_back_events: int = 30,
+    days_back_market: int = 30,
+    days_back_analysis: int = 30,
 ) -> dict:
     """
     Main daily pipeline orchestrating all data flows.
@@ -189,11 +189,11 @@ def daily_pipeline(
     skip_analysis : bool
         Skip analysis (default: False)
     days_back_events : int
-        Days of events to ingest (default: 1)
+        Days of events to ingest (default: 30)
     days_back_market : int
-        Days of market data to ingest (default: 5)
+        Days of market data to ingest (default: 30)
     days_back_analysis : int
-        Days of data to analyze (default: 7)
+        Days of data to analyze (default: 30)
 
     Returns
     -------

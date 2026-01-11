@@ -66,7 +66,7 @@ def fetch_symbol_data(
     ingestion = MarketDataIngestion()
 
     try:
-        records = ingestion.fetch_symbol(symbol, start_date, end_date)
+        records = ingestion.fetch_symbol_data(symbol, start_date, end_date)
 
         if records:
             ingestion.store_records(records)

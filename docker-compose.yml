@@ -89,10 +89,13 @@ services:
     environment:
       USE_API: "true"
       API_URL: http://api:8000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
       PYTHONPATH: /app
     ports:
       - "8501:8501"
     depends_on:
+      db:
+        condition: service_healthy
       api:
         condition: service_healthy
     restart: unless-stopped
@@ -129,11 +132,11 @@ services:
       PREFECT_SERVER_API_HOST: 0.0.0.0
       PREFECT_API_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////root/.prefect/prefect.db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     profiles:
       - prefect  # Only start with: docker compose --profile prefect up -d

@@ -56,6 +56,10 @@ def get_all_symbols() -> list[str]:
     return symbols
 
 
+# Convenience alias for backward compatibility
+TRACKED_SYMBOLS = get_all_symbols()
+
+
 def get_symbol_info(symbol: str) -> dict | None:
     """Get category and name for a symbol."""
     for category, symbols in SYMBOLS.items():

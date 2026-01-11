@@ -17,7 +17,7 @@ yfinance>=0.2.0
 requests>=2.31.0
 
 # Orchestration
-prefect>=2.14.0
+prefect==2.20.18
 
 # Analysis
 scipy>=1.11.0

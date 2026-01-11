@@ -33,6 +33,5 @@ COPY alembic.ini .
 # Set Python path so imports work
 ENV PYTHONPATH=/app
 
-# Default command: start Prefect worker
-# This will be overridden for the server container
-CMD ["prefect", "worker", "start", "-p", "default-agent-pool"]
+# Default command: create work pool (if needed) and start Prefect worker
+CMD ["sh", "-c", "prefect work-pool create default-agent-pool --type process 2>/dev/null || true && prefect worker start -p default-agent-pool"]

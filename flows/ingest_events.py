@@ -74,16 +74,15 @@ def fetch_gdelt_for_date(target_date: date) -> dict:
     ingestion = GDELTIngestion()
 
     try:
-        events = ingestion.fetch_events_for_date(target_date)
+        # ingest_date fetches and stores in one call
+        event_count = ingestion.ingest_date(target_date)
 
-        if events:
-            # Store in database
-            ingestion.store_events(events)
-            logger.info(f"Stored {len(events)} events for {target_date}")
+        if event_count > 0:
+            logger.info(f"Stored {event_count} events for {target_date}")
             return {
                 "date": str(target_date),
                 "status": "success",
-                "event_count": len(events),
+                "event_count": event_count,
             }
         else:
             logger.warning(f"No events found for {target_date}")
