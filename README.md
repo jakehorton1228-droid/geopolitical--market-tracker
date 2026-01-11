@@ -27,41 +27,46 @@ This system answers questions like:
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐
-│     GDELT       │    │  Yahoo Finance  │
-│  (events feed)  │    │  (market data)  │
-└────────┬────────┘    └────────┬────────┘
-         │                      │
-         └──────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │   Orchestration       │
-        │   (Prefect Flows)     │
-        └───────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │   Ingestion Layer     │
-        │  (Python + Pandas)    │
-        └───────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │     PostgreSQL        │
-        │   (SQLAlchemy ORM)    │
-        └───────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │   Analysis Layer      │
-        │ - Event Studies (CAR) │
-        │ - Anomaly Detection   │
-        │ - Regression          │
-        │ - Classification      │
-        └───────────┬───────────┘
-                    │
-        ┌───────────▼───────────┐
-        │   Presentation Layer  │
-        │ - FastAPI REST API    │
-        │ - Streamlit Dashboard │
-        └───────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Prefect Orchestration                            │
+│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐    │
+│  │  Ingest Events   │ → │  Ingest Market   │ → │   Run Analysis   │    │
+│  │    (GDELT)       │   │ (Yahoo Finance)  │   │                  │    │
+│  └────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘    │
+└───────────┼──────────────────────┼──────────────────────┼──────────────┘
+            │                      │                      │
+            ▼                      ▼                      │
+   ┌─────────────────┐    ┌─────────────────┐             │
+   │     GDELT       │    │  Yahoo Finance  │             │
+   │   (HTTP API)    │    │   (yfinance)    │             │
+   └─────────────────┘    └─────────────────┘             │
+                                                          │
+            ┌─────────────────────────────────────────────┘
+            │
+            ▼
+┌───────────────────────────┐
+│       PostgreSQL          │
+│    (SQLAlchemy ORM)       │
+│  ┌───────┐ ┌───────────┐  │
+│  │Events │ │MarketData │  │
+│  └───────┘ └───────────┘  │
+└─────────────┬─────────────┘
+              │
+              ▼
+┌───────────────────────────┐
+│     Analysis Layer        │
+│  - Event Studies (CAR)    │
+│  - Anomaly Detection      │
+│  - Regression             │
+│  - Classification         │
+└─────────────┬─────────────┘
+              │
+              ▼
+┌───────────────────────────┐
+│    Presentation Layer     │
+│  - FastAPI REST API       │
+│  - Streamlit Dashboard    │
+└───────────────────────────┘
 ```
 
 ## Quick Start
