@@ -2,6 +2,20 @@
 
 A data science portfolio project that ingests global geopolitical events and correlates them with financial market movements to surface non-obvious patterns, detect anomalies, and provide actionable insights.
 
+## About This Project
+
+This is a personal learning project designed to develop and demonstrate a wide range of data science and engineering skills. The goal is to become a well-rounded data scientist by building a complete, production-ready system from scratch.
+
+**Skills practiced in this project:**
+- **Data Engineering**: ETL pipelines, database design, API development
+- **Statistical Analysis**: Event studies, regression, anomaly detection
+- **Machine Learning**: Classification models, feature engineering
+- **Software Engineering**: Clean architecture, testing, Docker containerization
+- **DevOps**: CI/CD, orchestration with Prefect, Makefile automation
+- **Visualization**: Interactive dashboards with Streamlit and Plotly
+
+**Built with Claude Code** - This project leverages [Claude Code](https://claude.com/claude-code) as an AI pair programmer to accelerate development, learn best practices, and explore new technologies efficiently.
+
 ## Overview
 
 This system answers questions like:
