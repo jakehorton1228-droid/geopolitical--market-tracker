@@ -33,8 +33,8 @@ from prefect.artifacts import create_markdown_artifact
 
 from src.db.connection import get_session
 from src.db.models import Event, MarketData, AnalysisResult
-from src.analysis.event_study import ProductionEventStudy
-from src.analysis.anomaly import ProductionAnomalyDetector
+from src.analysis.production_event_study import ProductionEventStudy
+from src.analysis.production_anomaly import ProductionAnomalyDetector
 from src.config.constants import TRACKED_SYMBOLS
 
 
