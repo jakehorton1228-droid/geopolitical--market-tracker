@@ -66,15 +66,15 @@ def fetch_symbol_data(
     ingestion = MarketDataIngestion()
 
     try:
-        records = ingestion.fetch_symbol_data(symbol, start_date, end_date)
+        # ingest_symbol fetches and stores in one call
+        record_count = ingestion.ingest_symbol(symbol, start_date, end_date)
 
-        if records:
-            ingestion.store_records(records)
-            logger.info(f"Stored {len(records)} records for {symbol}")
+        if record_count > 0:
+            logger.info(f"Stored {record_count} records for {symbol}")
             return {
                 "symbol": symbol,
                 "status": "success",
-                "record_count": len(records),
+                "record_count": record_count,
             }
         else:
             logger.warning(f"No data returned for {symbol}")
