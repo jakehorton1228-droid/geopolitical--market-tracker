@@ -4,7 +4,7 @@ Analysis Flow.
 Runs statistical analysis on ingested data:
 - Event studies (CAR calculation)
 - Anomaly detection
-- Regression analysis
+- ML predictions (Gradient Boosting & LSTM)
 
 USAGE:
 ------
@@ -13,6 +13,9 @@ USAGE:
 
     # Run via Prefect CLI
     prefect deployment run 'run-analysis/daily'
+
+    # Run with ML predictions enabled
+    python flows/run_analysis.py --ml
 
 CONCEPTS:
 ---------
@@ -36,6 +39,10 @@ from src.db.models import Event, MarketData, AnalysisResult
 from src.analysis.production_event_study import ProductionEventStudy
 from src.analysis.production_anomaly import ProductionAnomalyDetector
 from src.config.constants import TRACKED_SYMBOLS
+
+# Advanced ML imports (lazy loaded to avoid slow startup)
+_gradient_boost_classifier = None
+_lstm_trainer = None
 
 
 @task(name="get-recent-events", description="Fetch events for analysis window")
@@ -204,6 +211,148 @@ def run_anomaly_detection(
     return results
 
 
+# =============================================================================
+# ADVANCED ML TASKS
+# =============================================================================
+
+@task(name="run-gradient-boost", description="Train and predict with XGBoost/LightGBM")
+def run_gradient_boost_predictions(
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    """
+    Train gradient boosting models and generate predictions.
+
+    This trains both XGBoost and LightGBM classifiers for each symbol
+    and returns predictions along with model comparison metrics.
+    """
+    logger = get_run_logger()
+    results = []
+
+    try:
+        from src.analysis.gradient_boost_classifier import GradientBoostClassifier
+
+        classifier = GradientBoostClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=5,
+        )
+
+        for symbol in symbols[:10]:  # Limit symbols for performance
+            try:
+                comparison = classifier.train_and_compare(symbol, start_date, end_date)
+
+                if comparison:
+                    # Record model performance
+                    results.append({
+                        "symbol": symbol,
+                        "analysis_type": "gradient_boost",
+                        "xgb_cv_accuracy": comparison.xgboost_metrics.cv_accuracy if comparison.xgboost_metrics else None,
+                        "lgb_cv_accuracy": comparison.lightgbm_metrics.cv_accuracy if comparison.lightgbm_metrics else None,
+                        "winner": comparison.winner,
+                        "top_features": list(comparison.feature_importance_xgb.keys())[:3],
+                    })
+
+                    logger.info(
+                        f"{symbol}: XGB={comparison.xgboost_metrics.cv_accuracy:.2%}, "
+                        f"LGB={comparison.lightgbm_metrics.cv_accuracy:.2%}, "
+                        f"Winner={comparison.winner}"
+                    )
+            except Exception as e:
+                logger.warning(f"Gradient boost failed for {symbol}: {e}")
+
+    except ImportError as e:
+        logger.warning(f"Gradient boost not available: {e}. Install xgboost and lightgbm.")
+
+    logger.info(f"Completed gradient boost analysis for {len(results)} symbols")
+    return results
+
+
+@task(name="run-lstm-predictions", description="Train LSTM and predict market direction")
+def run_lstm_predictions(
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    """
+    Train LSTM models and generate sequence-based predictions.
+
+    This creates sequences from historical data, trains an LSTM,
+    and evaluates its predictive performance.
+    """
+    logger = get_run_logger()
+    results = []
+
+    try:
+        from src.analysis.sequence_dataset import MarketSequenceDataset
+        from src.analysis.lstm_model import MarketLSTM, LSTMTrainer
+
+        for symbol in symbols[:5]:  # LSTM is slower, limit symbols
+            try:
+                # Create dataset
+                dataset = MarketSequenceDataset(
+                    symbol=symbol,
+                    sequence_length=20,
+                    start_date=start_date,
+                    end_date=end_date,
+                    test_ratio=0.2,
+                )
+
+                stats = dataset.get_stats()
+                if stats.train_size < 50:
+                    logger.warning(f"Insufficient data for LSTM on {symbol}: {stats.train_size} samples")
+                    continue
+
+                # Create and train model
+                model = MarketLSTM(
+                    input_size=stats.n_features,
+                    hidden_size=64,
+                    num_layers=2,
+                    dropout=0.2,
+                )
+
+                trainer = LSTMTrainer(model, learning_rate=0.001)
+                train_loader, test_loader = dataset.get_dataloaders(batch_size=32)
+
+                # Train (fewer epochs for flow efficiency)
+                history = trainer.fit(
+                    train_loader,
+                    test_loader,
+                    epochs=30,
+                    early_stopping_patience=5,
+                    verbose=False,
+                )
+
+                # Evaluate
+                test_results = trainer.predict(test_loader)
+
+                results.append({
+                    "symbol": symbol,
+                    "analysis_type": "lstm",
+                    "test_accuracy": test_results.accuracy,
+                    "test_f1": test_results.f1,
+                    "test_auc": test_results.auc,
+                    "best_epoch": history.best_epoch,
+                    "train_samples": stats.train_size,
+                    "test_samples": stats.test_size,
+                })
+
+                logger.info(
+                    f"{symbol} LSTM: Acc={test_results.accuracy:.2%}, "
+                    f"F1={test_results.f1:.2%}, AUC={test_results.auc:.3f}"
+                )
+
+            except Exception as e:
+                logger.warning(f"LSTM failed for {symbol}: {e}")
+
+    except ImportError as e:
+        logger.warning(f"LSTM not available: {e}. Install torch.")
+
+    logger.info(f"Completed LSTM analysis for {len(results)} symbols")
+    return results
+
+
 @task(name="store-results", description="Store analysis results in database")
 def store_analysis_results(results: list[dict]) -> int:
     """Store analysis results in the database."""
@@ -239,9 +388,12 @@ def store_analysis_results(results: list[dict]) -> int:
 def create_analysis_report(
     event_study_results: list[dict],
     anomaly_results: list[dict],
+    ml_results: list[dict] = None,
 ) -> str:
     """Create a markdown summary report."""
     logger = get_run_logger()
+
+    ml_results = ml_results or []
 
     # Calculate statistics
     significant_cars = [r for r in event_study_results if r.get("is_significant")]
@@ -279,6 +431,43 @@ def create_analysis_report(
     for atype, count in anomaly_types.items():
         report += f"- {atype}: {count}\n"
 
+    # ML Results section
+    if ml_results:
+        gb_results = [r for r in ml_results if r.get("analysis_type") == "gradient_boost"]
+        lstm_results = [r for r in ml_results if r.get("analysis_type") == "lstm"]
+
+        if gb_results:
+            report += f"""
+
+## Gradient Boosting Predictions
+| Symbol | XGBoost CV | LightGBM CV | Winner | Top Features |
+|--------|-----------|-------------|--------|--------------|
+"""
+            for r in sorted(gb_results, key=lambda x: x.get("xgb_cv_accuracy", 0), reverse=True):
+                xgb_acc = r.get("xgb_cv_accuracy", 0)
+                lgb_acc = r.get("lgb_cv_accuracy", 0)
+                features = ", ".join(r.get("top_features", [])[:3])
+                report += f"| {r.get('symbol')} | {xgb_acc:.1%} | {lgb_acc:.1%} | {r.get('winner')} | {features} |\n"
+
+            avg_xgb = sum(r.get("xgb_cv_accuracy", 0) for r in gb_results) / max(len(gb_results), 1)
+            avg_lgb = sum(r.get("lgb_cv_accuracy", 0) for r in gb_results) / max(len(gb_results), 1)
+            report += f"\n**Average CV Accuracy:** XGBoost={avg_xgb:.1%}, LightGBM={avg_lgb:.1%}\n"
+
+        if lstm_results:
+            report += f"""
+
+## LSTM Sequence Predictions
+| Symbol | Accuracy | F1 Score | AUC | Samples |
+|--------|----------|----------|-----|---------|
+"""
+            for r in sorted(lstm_results, key=lambda x: x.get("test_accuracy", 0), reverse=True):
+                report += f"| {r.get('symbol')} | {r.get('test_accuracy', 0):.1%} | {r.get('test_f1', 0):.1%} | {r.get('test_auc', 0):.3f} | {r.get('train_samples', 0)} |\n"
+
+            avg_acc = sum(r.get("test_accuracy", 0) for r in lstm_results) / max(len(lstm_results), 1)
+            avg_auc = sum(r.get("test_auc", 0) for r in lstm_results) / max(len(lstm_results), 1)
+            report += f"\n**Average Performance:** Accuracy={avg_acc:.1%}, AUC={avg_auc:.3f}\n"
+            report += f"**Baseline (random):** Accuracy=50%, AUC=0.500\n"
+
     logger.info("Generated analysis report")
     return report
 
@@ -286,18 +475,19 @@ def create_analysis_report(
 @flow(
     name="run-analysis",
     description="Run statistical analysis on market and event data",
-    version="1.0.0",
+    version="2.0.0",
 )
 def run_analysis(
     days_back: int = 30,
     end_date: date | None = None,
     symbols: list[str] | None = None,
     store_results: bool = True,
+    run_ml: bool = True,
 ) -> dict:
     """
     Main analysis flow.
 
-    Runs event studies and anomaly detection on recent data,
+    Runs event studies, anomaly detection, and ML predictions on recent data,
     then stores results and creates a report artifact.
 
     Parameters
@@ -310,6 +500,8 @@ def run_analysis(
         Symbols to analyze (default: all tracked)
     store_results : bool
         Whether to store results in database (default: True)
+    run_ml : bool
+        Whether to run ML predictions (gradient boost + LSTM) (default: True)
 
     Returns
     -------
@@ -327,6 +519,7 @@ def run_analysis(
     start_date = end_date - timedelta(days=days_back)
 
     logger.info(f"Starting analysis: {start_date} to {end_date}")
+    logger.info(f"ML predictions: {'enabled' if run_ml else 'disabled'}")
 
     # Fetch data
     events = get_recent_events(start_date, end_date)
@@ -336,9 +529,22 @@ def run_analysis(
         logger.warning("No events found for analysis")
         return {"status": "no_data", "message": "No events found"}
 
-    # Run analyses
+    # Run traditional analyses
     event_study_results = run_event_studies(events, market_data, symbols)
     anomaly_results = run_anomaly_detection(events, market_data, symbols)
+
+    # Run ML predictions (if enabled)
+    ml_results = []
+    if run_ml:
+        logger.info("Running ML predictions...")
+
+        # Gradient Boosting (XGBoost + LightGBM)
+        gb_results = run_gradient_boost_predictions(symbols, start_date, end_date)
+        ml_results.extend(gb_results)
+
+        # LSTM sequence predictions
+        lstm_results = run_lstm_predictions(symbols, start_date, end_date)
+        ml_results.extend(lstm_results)
 
     # Store results
     if store_results:
@@ -347,14 +553,18 @@ def run_analysis(
     else:
         stored_count = 0
 
-    # Create report artifact
-    report = create_analysis_report(event_study_results, anomaly_results)
+    # Create report artifact (now includes ML results)
+    report = create_analysis_report(event_study_results, anomaly_results, ml_results)
 
     create_markdown_artifact(
         key="analysis-report",
         markdown=report,
         description=f"Analysis report for {start_date} to {end_date}",
     )
+
+    # Summary statistics
+    gb_results = [r for r in ml_results if r.get("analysis_type") == "gradient_boost"]
+    lstm_results = [r for r in ml_results if r.get("analysis_type") == "lstm"]
 
     summary = {
         "date_range": f"{start_date} to {end_date}",
@@ -363,6 +573,12 @@ def run_analysis(
         "significant_results": sum(1 for r in event_study_results if r.get("is_significant")),
         "anomalies_detected": len(anomaly_results),
         "results_stored": stored_count,
+        "ml_predictions": {
+            "gradient_boost_symbols": len(gb_results),
+            "lstm_symbols": len(lstm_results),
+            "avg_gb_accuracy": sum(r.get("xgb_cv_accuracy", 0) for r in gb_results) / max(len(gb_results), 1) if gb_results else None,
+            "avg_lstm_accuracy": sum(r.get("test_accuracy", 0) for r in lstm_results) / max(len(lstm_results), 1) if lstm_results else None,
+        } if run_ml else None,
     }
 
     logger.info(f"Analysis complete: {summary}")
@@ -395,6 +611,8 @@ if __name__ == "__main__":
     parser.add_argument("--deploy", action="store_true", help="Create Prefect deployment")
     parser.add_argument("--days", type=int, default=30, help="Days to analyze")
     parser.add_argument("--no-store", action="store_true", help="Don't store results")
+    parser.add_argument("--ml", action="store_true", default=True, help="Run ML predictions (default: True)")
+    parser.add_argument("--no-ml", action="store_true", help="Disable ML predictions")
 
     args = parser.parse_args()
 
@@ -404,5 +622,6 @@ if __name__ == "__main__":
         result = run_analysis(
             days_back=args.days,
             store_results=not args.no_store,
+            run_ml=not args.no_ml,
         )
         print(f"Result: {result}")

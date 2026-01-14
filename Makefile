@@ -55,11 +55,25 @@ help: ## Show this help message
 up: ## Start all services (database, API, dashboard)
 	@echo "$(GREEN)Starting all services...$(NC)"
 	docker compose up -d
+	@echo "$(YELLOW)Waiting for database to be healthy...$(NC)"
+	@sleep 5
+	@$(MAKE) --no-print-directory _init-db
 	@echo ""
-	@echo "$(GREEN)Services started!$(NC)"
+	@echo "$(GREEN)Services ready!$(NC)"
 	@echo "  Dashboard: http://localhost:8501"
 	@echo "  API Docs:  http://localhost:8000/docs"
 	@echo "  Database:  localhost:5432"
+
+_init-db: ## (internal) Run migrations and ingest data if needed
+	@echo "$(BLUE)Running database migrations...$(NC)"
+	@. venv/bin/activate && alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied or venv not found$(NC)"
+	@EVENT_COUNT=$$(docker exec gmt-db psql -U postgres -d geopolitical_tracker -t -c "SELECT COUNT(*) FROM events;" 2>/dev/null | tr -d ' ' || echo "0"); \
+	if [ "$$EVENT_COUNT" = "0" ] || [ -z "$$EVENT_COUNT" ]; then \
+		echo "$(BLUE)No events found. Ingesting initial data...$(NC)"; \
+		$(MAKE) --no-print-directory ingest-all; \
+	else \
+		echo "$(GREEN)Database already has $$EVENT_COUNT events.$(NC)"; \
+	fi
 
 down: ## Stop all services
 	@echo "$(YELLOW)Stopping all services...$(NC)"

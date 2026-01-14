@@ -73,20 +73,26 @@ This system answers questions like:
 
 ### Option 1: Docker (Recommended)
 
-Start the entire stack with one command:
-
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/YOUR_USERNAME/geopolitical-market-tracker.git
 cd geopolitical-market-tracker
 
-# Start all services
+# 2. Start all services (database, API, dashboard)
 make up
 
-# Access the applications
-# Dashboard: http://localhost:8501
-# API Docs:  http://localhost:8000/docs
-# Database:  localhost:5432
+# 3. Wait for services to be healthy, then ingest data
+make ingest-all
+
+# 4. Access the applications
+#    Dashboard: http://localhost:8501
+#    API Docs:  http://localhost:8000/docs
+#    Database:  localhost:5432
+```
+
+To stop the services:
+```bash
+make down
 ```
 
 ### Option 2: Local Development
@@ -99,21 +105,29 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Start database only
+# 2. Start database only (requires Docker)
 make up-db
 
-# 3. Run migrations
+# 3. Run database migrations
 alembic upgrade head
 
-# 4. Ingest data
+# 4. Ingest data (fetches last 7 days of events + 30 days of market data)
 make ingest-all
 
-# 5. Run dashboard (direct DB mode)
+# 5. Run the dashboard
 make dev-dashboard
 
-# 6. (Optional) Run API separately
+# 6. (Optional) Run the API in a separate terminal
 make dev-api
 ```
+
+### Verify It's Working
+
+After completing either option, you should be able to:
+
+1. **View the Dashboard** at http://localhost:8501 - see event counts and market data
+2. **Explore the API** at http://localhost:8000/docs - interactive Swagger documentation
+3. **Query events** via API: `curl http://localhost:8000/api/events?limit=5`
 
 ## Makefile Commands
 
