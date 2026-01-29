@@ -12,16 +12,24 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date, timedelta
 
-from src.db.connection import get_session
-from src.db.models import Event, MarketData, AnalysisResult
 from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info, CAMEO_CATEGORIES
-from sqlalchemy import func
+
+# Check mode
+USE_API = os.getenv("USE_API", "false").lower() == "true"
+
+if USE_API:
+    from dashboard.api_client import get_client
+else:
+    from src.db.connection import get_session
+    from src.db.models import Event, MarketData, AnalysisResult
+    from sqlalchemy import func
 
 
 def render():
@@ -140,7 +148,7 @@ def render_event_study_results(start_date: date, end_date: date):
         # Show how to run analysis
         with st.expander("How to run event study analysis"):
             st.code("""
-from src.analysis.event_study import ProductionEventStudy
+from src.analysis.production_event_study import ProductionEventStudy
 from src.db.connection import get_session
 from datetime import date
 

@@ -253,6 +253,8 @@ class GradientBoostClassifier:
         self.lgb_models: dict[str, lgb.LGBMClassifier] = {}
         self.scalers: dict[str, StandardScaler] = {}
         self.feature_names: list[str] = []
+        # Cache training data for SHAP explainability
+        self.training_data: dict[str, dict] = {}
 
     # =========================================================================
     # FEATURE ENGINEERING
@@ -267,116 +269,21 @@ class GradientBoostClassifier:
         """
         Prepare feature matrix (X) and target vector (y).
 
-        FEATURE ENGINEERING is crucial for ML success. The raw data isn't
-        directly usable - we need to transform it into meaningful features.
+        Uses the extended feature set with goldstein_std and mentions_max
+        for gradient boosting models which benefit from richer features.
 
-        Our features capture:
-        1. Event severity (goldstein_scale statistics)
-        2. Media attention (mention counts)
-        3. Sentiment (avg_tone)
-        4. Event types (conflict vs cooperation counts)
+        Delegates to shared FeatureEngineering module for consistent
+        feature preparation across all analysis modules.
 
         Returns:
             X: Feature matrix of shape (n_samples, n_features)
             y: Target vector of shape (n_samples,) with 1=UP, 0=DOWN
             feature_names: List of feature names for interpretability
         """
-        # ----- Step 1: Get market data -----
-        with get_session() as session:
-            market_data = get_market_data(session, symbol, start_date, end_date)
-            if not market_data:
-                logger.warning(f"No market data for {symbol}")
-                return np.array([]), np.array([]), []
+        from src.analysis.feature_engineering import FeatureEngineering
 
-            # Convert to DataFrame for easier manipulation
-            market_df = pd.DataFrame([
-                {"date": m.date, "log_return": m.log_return}
-                for m in market_data
-            ])
-
-        # ----- Step 2: Get event data -----
-        with get_session() as session:
-            events = get_events_by_date_range(session, start_date, end_date)
-            if not events:
-                logger.warning(f"No events found for date range")
-                return np.array([]), np.array([]), []
-
-            # Extract features from each event
-            # WHY THESE FEATURES?
-            # - goldstein_scale: Measures event severity (-10 to +10)
-            # - num_mentions: Proxy for event importance
-            # - avg_tone: Sentiment of news coverage
-            # - is_conflict: Military/violent events (codes 18-20)
-            # - is_cooperation: Positive diplomatic events (codes 03-06)
-            events_df = pd.DataFrame([
-                {
-                    "date": e.event_date,
-                    "goldstein_scale": e.goldstein_scale or 0,
-                    "num_mentions": e.num_mentions or 0,
-                    "avg_tone": e.avg_tone or 0,
-                    "is_conflict": 1 if e.event_root_code in ["18", "19", "20"] else 0,
-                    "is_cooperation": 1 if e.event_root_code in ["03", "04", "05", "06"] else 0,
-                }
-                for e in events
-            ])
-
-        # ----- Step 3: Aggregate events by date -----
-        # Multiple events happen per day, so we aggregate them.
-        # WHY THESE AGGREGATIONS?
-        # - mean: Overall sentiment that day
-        # - min/max: Captures extreme events (one bad event can move markets)
-        # - sum: Total volume of mentions/conflicts
-        event_agg = events_df.groupby("date").agg({
-            "goldstein_scale": ["mean", "min", "max", "std"],  # Added std for volatility
-            "num_mentions": ["sum", "max"],  # Total and peak attention
-            "avg_tone": "mean",
-            "is_conflict": "sum",
-            "is_cooperation": "sum",
-        }).reset_index()
-
-        # Flatten hierarchical column names
-        event_agg.columns = [
-            "date",
-            "goldstein_mean", "goldstein_min", "goldstein_max", "goldstein_std",
-            "mentions_total", "mentions_max",
-            "avg_tone",
-            "conflict_count", "cooperation_count"
-        ]
-
-        # Fill NaN standard deviation (happens when only 1 event)
-        event_agg["goldstein_std"] = event_agg["goldstein_std"].fillna(0)
-
-        # ----- Step 4: Merge market and event data -----
-        merged = pd.merge(market_df, event_agg, on="date", how="left")
-
-        # Fill missing event data with neutral values
-        # (days with no events get zeros)
-        merged = merged.fillna(0)
-
-        # Remove rows where we can't calculate return
-        merged = merged.dropna(subset=["log_return"])
-
-        # Need minimum samples for meaningful training
-        if len(merged) < 30:
-            logger.warning(f"Insufficient data for {symbol}: {len(merged)} samples")
-            return np.array([]), np.array([]), []
-
-        # ----- Step 5: Create target variable -----
-        # Binary classification: UP (1) if positive return, DOWN (0) otherwise
-        y = (merged["log_return"] > 0).astype(int).values
-
-        # ----- Step 6: Create feature matrix -----
-        feature_cols = [
-            "goldstein_mean", "goldstein_min", "goldstein_max", "goldstein_std",
-            "mentions_total", "mentions_max",
-            "avg_tone",
-            "conflict_count", "cooperation_count"
-        ]
-        X = merged[feature_cols].values
-
-        logger.info(f"Prepared {len(X)} samples with {len(feature_cols)} features for {symbol}")
-
-        return X, y, feature_cols
+        fe = FeatureEngineering()
+        return fe.prepare_extended_features(symbol, start_date, end_date)
 
     # =========================================================================
     # MODEL TRAINING
@@ -530,6 +437,13 @@ class GradientBoostClassifier:
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         self.scalers[symbol] = scaler
+
+        # Cache training data for SHAP explainability
+        self.training_data[symbol] = {
+            "X": X_scaled,
+            "y": y,
+            "feature_names": feature_names,
+        }
 
         # ----- Train XGBoost -----
         logger.info(f"Training XGBoost for {symbol}...")

@@ -208,8 +208,97 @@ class PredictionResponse(BaseModel):
     probability_up: float = Field(..., ge=0, le=1)
     probability_down: float = Field(..., ge=0, le=1)
     confidence: float = Field(..., ge=0, le=1, description="How confident (0.5 = uncertain)")
-    model_version: str = "demo-v1"
+    model_type: str = Field("gradient_boosting", description="Model used for prediction")
+    model_version: str = "v2"
     disclaimer: str = "This is a demonstration model. Not financial advice."
+
+
+# =============================================================================
+# EVENT STUDY SCHEMAS
+# =============================================================================
+
+class EventStudyRequest(BaseModel):
+    """Request parameters for running an event study."""
+    symbol: str = Field(..., description="Market symbol (e.g., CL=F)")
+    event_id: int = Field(..., description="Event ID to analyze")
+    event_date: date = Field(..., description="Date of the event")
+
+
+class EventStudyResponse(BaseModel):
+    """Response from event study analysis."""
+    event_id: int
+    symbol: str
+    event_date: date
+    car: float = Field(..., description="Cumulative Abnormal Return")
+    car_percent: float = Field(..., description="CAR as percentage")
+    t_statistic: float
+    p_value: float
+    is_significant: bool
+    ci_lower: float
+    ci_upper: float
+    expected_return: float
+    actual_return: float
+    std_dev: float
+    wilcoxon_p: float | None = None
+    estimation_days: int
+    event_days: int
+    summary: str
+
+
+# =============================================================================
+# REGRESSION SCHEMAS
+# =============================================================================
+
+class RegressionResponse(BaseModel):
+    """Response from regression analysis."""
+    symbol: str
+    r_squared: float
+    adj_r_squared: float
+    f_statistic: float
+    f_pvalue: float
+    coefficients: dict[str, float]
+    std_errors: dict[str, float]
+    t_values: dict[str, float]
+    p_values: dict[str, float]
+    conf_int_lower: dict[str, float]
+    conf_int_upper: dict[str, float]
+    n_observations: int
+    n_features: int
+    summary: str
+
+
+# =============================================================================
+# ANOMALY DETECTION SCHEMAS
+# =============================================================================
+
+class AnomalyDetectionResponse(BaseModel):
+    """Response from production anomaly detection."""
+    date: date
+    symbol: str
+    anomaly_type: str
+    actual_return: float
+    expected_return: float
+    z_score: float
+    isolation_score: float
+    anomaly_probability: float
+    event_count: int = 0
+    avg_goldstein: float = 0.0
+    detected_by: list[str] = []
+
+
+class AnomalyReportResponse(BaseModel):
+    """Summary report from anomaly detection."""
+    symbol: str
+    start_date: date
+    end_date: date
+    total_days: int
+    anomaly_count: int
+    anomaly_rate: float
+    unexplained_moves: int
+    muted_responses: int
+    statistical_outliers: int
+    top_anomalies: list[AnomalyDetectionResponse]
+    summary: str
 
 
 # =============================================================================

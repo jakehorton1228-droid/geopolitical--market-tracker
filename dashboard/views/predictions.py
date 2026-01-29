@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -19,13 +20,20 @@ import plotly.graph_objects as go
 from datetime import date, timedelta
 import numpy as np
 
-from src.db.connection import get_session
-from src.db.models import Event, MarketData
 from src.config.constants import (
     SYMBOLS, get_all_symbols, get_symbol_info,
     CAMEO_CATEGORIES, EVENT_GROUPS, get_event_group
 )
-from sqlalchemy import func
+
+# Check mode
+USE_API = os.getenv("USE_API", "false").lower() == "true"
+
+if USE_API:
+    from dashboard.api_client import get_client
+else:
+    from src.db.connection import get_session
+    from src.db.models import Event, MarketData
+    from sqlalchemy import func
 
 # Try to import ML models (may not be installed)
 try:

@@ -109,60 +109,16 @@ class ProductionRegression:
         start_date: date,
         end_date: date,
     ) -> tuple[np.ndarray, np.ndarray, list[str]]:
-        """Prepare features and target for regression."""
-        # Get market data
-        with get_session() as session:
-            market_data = get_market_data(session, symbol, start_date, end_date)
-            if not market_data:
-                return np.array([]), np.array([]), []
+        """
+        Prepare features and target for regression.
 
-            market_df = pd.DataFrame([
-                {"date": m.date, "log_return": m.log_return}
-                for m in market_data
-            ])
+        Delegates to shared FeatureEngineering module for consistent
+        feature preparation across all analysis modules.
+        """
+        from src.analysis.feature_engineering import FeatureEngineering
 
-        # Get events
-        with get_session() as session:
-            events = get_events_by_date_range(session, start_date, end_date)
-            if not events:
-                return np.array([]), np.array([]), []
-
-            events_df = pd.DataFrame([
-                {
-                    "date": e.event_date,
-                    "goldstein_scale": e.goldstein_scale or 0,
-                    "num_mentions": e.num_mentions or 0,
-                    "avg_tone": e.avg_tone or 0,
-                    "is_conflict": 1 if e.event_root_code in ["18", "19", "20"] else 0,
-                }
-                for e in events
-            ])
-
-        # Aggregate by date
-        event_agg = events_df.groupby("date").agg({
-            "goldstein_scale": "mean",
-            "num_mentions": "sum",
-            "avg_tone": "mean",
-            "is_conflict": "sum",
-        }).reset_index()
-
-        event_agg.columns = ["date", "goldstein_mean", "mentions_total", "avg_tone", "conflict_count"]
-
-        # Merge
-        merged = pd.merge(market_df, event_agg, on="date", how="left").fillna(0)
-        merged = merged.dropna(subset=["log_return"])
-
-        if len(merged) < 10:
-            return np.array([]), np.array([]), []
-
-        # Target
-        y = merged["log_return"].values
-
-        # Features
-        feature_cols = ["goldstein_mean", "mentions_total", "avg_tone", "conflict_count"]
-        X = merged[feature_cols].values
-
-        return X, y, feature_cols
+        fe = FeatureEngineering()
+        return fe.prepare_regression_features(symbol, start_date, end_date)
 
     def analyze(
         self,

@@ -5,6 +5,8 @@ Runs statistical analysis on ingested data:
 - Event studies (CAR calculation)
 - Anomaly detection
 - ML predictions (Gradient Boosting & LSTM)
+- Drift detection (feature distribution shifts)
+- Data quality checks
 
 USAGE:
 ------
@@ -353,6 +355,105 @@ def run_lstm_predictions(
     return results
 
 
+@task(name="run-drift-detection", description="Detect feature distribution drift")
+def run_drift_detection(
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    """
+    Run drift detection across symbols.
+
+    Checks if feature distributions have shifted significantly
+    compared to a historical baseline, which may indicate the
+    need for model retraining.
+    """
+    logger = get_run_logger()
+    results = []
+
+    try:
+        from src.analysis.drift_detection import DriftDetector
+
+        detector = DriftDetector(baseline_window=60, test_window=14)
+
+        for symbol in symbols[:10]:
+            try:
+                report = detector.analyze(symbol, start_date, end_date)
+                if report is None:
+                    continue
+
+                results.append({
+                    "symbol": symbol,
+                    "analysis_type": "drift_detection",
+                    "drift_detected": report.drift_detected,
+                    "severity": report.overall_severity,
+                    "drifted_features": report.drifted_features,
+                    "total_features": report.total_features,
+                })
+
+                if report.drift_detected:
+                    logger.warning(
+                        f"{symbol}: Drift detected! Severity={report.overall_severity}, "
+                        f"{report.drifted_features}/{report.total_features} features drifted"
+                    )
+            except Exception as e:
+                logger.warning(f"Drift detection failed for {symbol}: {e}")
+
+    except ImportError as e:
+        logger.warning(f"Drift detection not available: {e}")
+
+    logger.info(f"Drift detection complete: {len(results)} symbols checked")
+    return results
+
+
+@task(name="run-data-quality", description="Check data quality across sources")
+def run_data_quality_checks(
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+) -> dict:
+    """
+    Run data quality checks and return a summary.
+
+    Checks completeness, freshness, and validity of both
+    market data and event data.
+    """
+    logger = get_run_logger()
+
+    try:
+        from src.analysis.data_quality import DataQualityChecker
+
+        checker = DataQualityChecker()
+        report = checker.check_all(start_date, end_date, symbols=symbols[:10])
+
+        summary = {
+            "overall_score": report.overall_score,
+            "symbols_checked": report.symbols_checked,
+            "symbols_with_issues": report.symbols_with_issues,
+            "total_issues": report.total_issues,
+            "high_severity": report.high_severity_issues,
+            "medium_severity": report.medium_severity_issues,
+            "low_severity": report.low_severity_issues,
+        }
+
+        if report.high_severity_issues > 0:
+            logger.warning(
+                f"Data quality: {report.high_severity_issues} high-severity issues found! "
+                f"Overall score: {report.overall_score:.0%}"
+            )
+        else:
+            logger.info(f"Data quality score: {report.overall_score:.0%}")
+
+        return summary
+
+    except ImportError as e:
+        logger.warning(f"Data quality checks not available: {e}")
+        return {}
+    except Exception as e:
+        logger.warning(f"Data quality checks failed: {e}")
+        return {}
+
+
 @task(name="store-results", description="Store analysis results in database")
 def store_analysis_results(results: list[dict]) -> int:
     """Store analysis results in the database."""
@@ -546,6 +647,11 @@ def run_analysis(
         lstm_results = run_lstm_predictions(symbols, start_date, end_date)
         ml_results.extend(lstm_results)
 
+    # Run monitoring tasks
+    logger.info("Running monitoring checks...")
+    drift_results = run_drift_detection(symbols, start_date, end_date)
+    dq_summary = run_data_quality_checks(symbols, start_date, end_date)
+
     # Store results
     if store_results:
         all_results = event_study_results + anomaly_results
@@ -553,7 +659,7 @@ def run_analysis(
     else:
         stored_count = 0
 
-    # Create report artifact (now includes ML results)
+    # Create report artifact (now includes ML results and monitoring)
     report = create_analysis_report(event_study_results, anomaly_results, ml_results)
 
     create_markdown_artifact(
@@ -579,6 +685,12 @@ def run_analysis(
             "avg_gb_accuracy": sum(r.get("xgb_cv_accuracy", 0) for r in gb_results) / max(len(gb_results), 1) if gb_results else None,
             "avg_lstm_accuracy": sum(r.get("test_accuracy", 0) for r in lstm_results) / max(len(lstm_results), 1) if lstm_results else None,
         } if run_ml else None,
+        "monitoring": {
+            "drift_symbols_checked": len(drift_results),
+            "drift_detected_count": sum(1 for d in drift_results if d.get("drift_detected")),
+            "data_quality_score": dq_summary.get("overall_score"),
+            "data_quality_issues": dq_summary.get("total_issues", 0),
+        },
     }
 
     logger.info(f"Analysis complete: {summary}")

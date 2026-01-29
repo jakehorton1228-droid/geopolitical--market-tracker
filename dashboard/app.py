@@ -49,7 +49,7 @@ st.set_page_config(
 
 # Import views (must be after set_page_config)
 # Note: folder is named 'views' not 'pages' to prevent Streamlit auto-detection
-from dashboard.views import home, event_map, market_analysis, anomalies, predictions
+from dashboard.views import home, event_map, market_analysis, anomalies, predictions, regression, explainability, nlp, monitoring
 
 
 def main():
@@ -66,8 +66,12 @@ def main():
             "🏠 Home",
             "🗺️ Event Map",
             "📈 Market Analysis",
+            "📊 Regression",
             "🔍 Anomalies",
             "🎯 Predictions",
+            "🧠 Explainability",
+            "🔬 NLP Intelligence",
+            "📡 Monitoring",
         ],
         label_visibility="collapsed",
     )
@@ -114,10 +118,18 @@ def main():
         event_map.render()
     elif page == "📈 Market Analysis":
         market_analysis.render()
+    elif page == "📊 Regression":
+        regression.render()
     elif page == "🔍 Anomalies":
         anomalies.render()
     elif page == "🎯 Predictions":
         predictions.render()
+    elif page == "🧠 Explainability":
+        explainability.render()
+    elif page == "🔬 NLP Intelligence":
+        nlp.render()
+    elif page == "📡 Monitoring":
+        monitoring.render()
 
 
 if __name__ == "__main__":

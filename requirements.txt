@@ -29,6 +29,11 @@ xgboost>=2.0.0
 lightgbm>=4.0.0
 sentence-transformers>=2.2.0
 torch>=2.0.0
+shap>=0.42.0
+
+# NLP / RAG
+transformers>=4.30.0
+faiss-cpu>=1.7.0
 
 # Visualization (dashboard)
 streamlit>=1.28.0

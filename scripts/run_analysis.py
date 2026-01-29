@@ -16,9 +16,6 @@ USAGE:
     # Run anomaly detection
     python scripts/run_analysis.py anomalies --symbol GC=F --days 60
 
-    # Train classifier
-    python scripts/run_analysis.py classify --symbol CL=F --days 180
-
     # Compare all markets
     python scripts/run_analysis.py compare --days 90
 
@@ -106,35 +103,6 @@ def run_anomaly_detection(args):
     report = detector.get_anomaly_report(anomalies, args.symbol, start_date, end_date)
 
     print(report.summary)
-
-
-def run_classification(args):
-    """Train and evaluate classifier."""
-    from src.analysis.production_classifier import ProductionClassifier
-
-    classifier = ProductionClassifier()
-
-    end_date = date.today()
-    start_date = end_date - timedelta(days=args.days)
-
-    print(f"\nTraining classifier for {args.symbol} ({args.days} days)...")
-    metrics = classifier.train(args.symbol, start_date, end_date)
-
-    if metrics:
-        print(f"\nResults for {args.symbol}:")
-        print(f"  Accuracy: {metrics.accuracy:.2%}")
-        print(f"  Precision: {metrics.precision:.2%}")
-        print(f"  Recall: {metrics.recall:.2%}")
-        print(f"  F1 Score: {metrics.f1_score:.2%}")
-        print(f"  Cross-validation: {metrics.cv_accuracy:.2%} (+/- {metrics.cv_std*2:.2%})")
-        print(f"  Samples: {metrics.n_samples}")
-
-        if args.verbose:
-            print("\nFeature Importance:")
-            for name, imp in classifier.get_feature_importance(args.symbol).items():
-                print(f"  {name}: {imp:.4f}")
-    else:
-        print("Training failed - insufficient data")
 
 
 def run_comparison(args):
@@ -234,23 +202,6 @@ def main():
         help="Number of days to analyze (default: 60)",
     )
 
-    # Classification command
-    classify_parser = subparsers.add_parser(
-        "classify",
-        help="Train and evaluate classifier",
-    )
-    classify_parser.add_argument(
-        "-s", "--symbol",
-        required=True,
-        help="Ticker symbol",
-    )
-    classify_parser.add_argument(
-        "--days",
-        type=int,
-        default=180,
-        help="Number of days for training (default: 180)",
-    )
-
     # Comparison command
     compare_parser = subparsers.add_parser(
         "compare",
@@ -283,8 +234,6 @@ def main():
         run_regression(args)
     elif args.command == "anomalies":
         run_anomaly_detection(args)
-    elif args.command == "classify":
-        run_classification(args)
     elif args.command == "compare":
         run_comparison(args)
     else:

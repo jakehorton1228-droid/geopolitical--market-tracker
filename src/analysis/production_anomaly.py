@@ -164,104 +164,17 @@ class ProductionAnomalyDetector:
         """
         Prepare feature matrix for anomaly detection.
 
-        Features include:
-        - Daily return
-        - Absolute return (magnitude)
-        - Rolling volatility
-        - Volume change (if available)
-        - Event features
+        Delegates to shared FeatureEngineering module for consistent
+        feature preparation. Returns a full DataFrame with rolling
+        statistics, market features, and event features.
         """
-        # Fetch extra days for lookback
-        fetch_start = start_date - timedelta(days=self.lookback_days + 10)
+        from src.analysis.feature_engineering import FeatureEngineering
 
-        # Get market data
-        with get_session() as session:
-            market_data = get_market_data(session, symbol, fetch_start, end_date)
-
-            if not market_data:
-                return pd.DataFrame()
-
-            market_df = pd.DataFrame([
-                {
-                    "date": m.date,
-                    "close": float(m.close),
-                    "log_return": m.log_return,
-                    "volume": m.volume,
-                }
-                for m in market_data
-            ])
-
-        if market_df.empty or len(market_df) < self.lookback_days:
-            return pd.DataFrame()
-
-        market_df = market_df.sort_values("date").reset_index(drop=True)
-
-        # Calculate features
-        market_df["abs_return"] = market_df["log_return"].abs()
-        market_df["rolling_mean"] = market_df["log_return"].rolling(
-            window=self.lookback_days, min_periods=10
-        ).mean()
-        market_df["rolling_std"] = market_df["log_return"].rolling(
-            window=self.lookback_days, min_periods=10
-        ).std()
-        market_df["z_score"] = (
-            (market_df["log_return"] - market_df["rolling_mean"]) /
-            market_df["rolling_std"]
+        fe = FeatureEngineering()
+        return fe.prepare_anomaly_features(
+            symbol, start_date, end_date,
+            lookback_days=self.lookback_days,
         )
-
-        # Volume features (if available)
-        if market_df["volume"].notna().any():
-            market_df["volume_change"] = market_df["volume"].pct_change()
-            market_df["volume_zscore"] = (
-                (market_df["volume"] - market_df["volume"].rolling(self.lookback_days).mean()) /
-                market_df["volume"].rolling(self.lookback_days).std()
-            )
-        else:
-            market_df["volume_change"] = 0
-            market_df["volume_zscore"] = 0
-
-        # Get event data
-        with get_session() as session:
-            events = get_events_by_date_range(session, fetch_start, end_date)
-
-            if events:
-                events_df = pd.DataFrame([
-                    {
-                        "date": e.event_date,
-                        "goldstein_scale": e.goldstein_scale or 0,
-                        "num_mentions": e.num_mentions or 0,
-                    }
-                    for e in events
-                ])
-
-                event_agg = events_df.groupby("date").agg({
-                    "goldstein_scale": ["mean", "min", "count"],
-                    "num_mentions": "sum",
-                }).reset_index()
-                event_agg.columns = [
-                    "date", "goldstein_mean", "goldstein_min",
-                    "event_count", "mentions_total"
-                ]
-
-                market_df = pd.merge(market_df, event_agg, on="date", how="left")
-
-            # Fill missing event data
-            for col in ["goldstein_mean", "goldstein_min", "event_count", "mentions_total"]:
-                if col not in market_df.columns:
-                    market_df[col] = 0
-                else:
-                    market_df[col] = market_df[col].fillna(0)
-
-        # Filter to requested date range
-        market_df = market_df[
-            (market_df["date"] >= start_date) &
-            (market_df["date"] <= end_date)
-        ].copy()
-
-        # Drop rows with NaN in critical columns
-        market_df = market_df.dropna(subset=["log_return", "z_score"])
-
-        return market_df
 
     def detect_with_isolation_forest(
         self,

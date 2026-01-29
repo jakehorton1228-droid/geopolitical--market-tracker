@@ -9,13 +9,16 @@ USAGE:
     GET /api/analysis/anomalies - List detected anomalies
     GET /api/analysis/significant - List significant results
     POST /api/analysis/predict - Predict market direction
+    POST /api/analysis/event-study - Run event study on demand
+    GET /api/analysis/regression/{symbol} - Run regression analysis
+    GET /api/analysis/anomalies/detect - Run production anomaly detection
 """
 
 from datetime import date, timedelta
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-import numpy as np
 
 from src.db.connection import get_session
 from src.db.models import Event, AnalysisResult
@@ -23,9 +26,16 @@ from src.config.constants import CAMEO_CATEGORIES, get_event_group
 from src.api.schemas import (
     AnalysisResultResponse,
     AnomalyResponse,
+    AnomalyDetectionResponse,
+    AnomalyReportResponse,
+    EventStudyRequest,
+    EventStudyResponse,
     PredictionRequest,
     PredictionResponse,
+    RegressionResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
 
@@ -213,6 +223,10 @@ def predict_market_direction(request: PredictionRequest):
     """
     Predict market direction based on event characteristics.
 
+    Uses a trained Gradient Boosting model (XGBoost) for real ML predictions.
+    The model is trained on historical event-market data each time a prediction
+    is requested, using the last 365 days of data.
+
     **Input:**
     - `symbol`: Market to predict (e.g., CL=F, SPY)
     - `goldstein_scale`: Event severity (-10 to +10)
@@ -224,54 +238,297 @@ def predict_market_direction(request: PredictionRequest):
     - `prediction`: UP or DOWN
     - `probability_up`: Probability of upward move
     - `confidence`: How confident the model is
-
-    **Note:** This is a demonstration model using heuristics.
-    In production, this would load a trained ML model.
+    - `model_type`: Which model was used
     """
-    # Simple heuristic-based prediction (demo)
-    # In production, this would load a trained model
-    base_prob = 0.5
+    try:
+        from src.analysis.gradient_boost_classifier import GradientBoostClassifier
 
-    # Goldstein effect: negative = down, positive = up
-    goldstein_effect = request.goldstein_scale * 0.03
-    base_prob += goldstein_effect
+        end_date = date.today()
+        start_date = end_date - timedelta(days=365)
 
-    # Tone effect
-    tone_effect = request.avg_tone * 0.02
-    base_prob += tone_effect
+        classifier = GradientBoostClassifier(
+            n_estimators=100, learning_rate=0.1, max_depth=5
+        )
+        comparison = classifier.train_and_compare(
+            request.symbol, start_date, end_date
+        )
 
-    # Conflict tends to push markets down
-    if request.is_violent_conflict:
-        base_prob -= 0.1
+        if comparison is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Insufficient data to train model for {request.symbol}",
+            )
 
-    # More mentions = stronger signal
-    if request.num_mentions > 50:
-        base_prob += goldstein_effect * 0.3
-    if request.num_mentions > 100:
-        base_prob += goldstein_effect * 0.2
+        features = {
+            "goldstein_mean": request.goldstein_scale,
+            "goldstein_min": request.goldstein_scale - 2,
+            "goldstein_max": request.goldstein_scale + 2,
+            "goldstein_std": 2.0,
+            "mentions_total": request.num_mentions,
+            "mentions_max": max(1, request.num_mentions // 3),
+            "avg_tone": request.avg_tone,
+            "conflict_count": 3 if request.is_violent_conflict else 0,
+            "cooperation_count": 0 if request.is_violent_conflict else 2,
+        }
 
-    # Symbol-specific adjustments
-    safe_havens = ["GC=F", "TLT", "^VIX"]  # Gold, bonds, VIX
-    if request.symbol in safe_havens and request.goldstein_scale < 0:
-        # Safe havens go up during conflict
-        base_prob = 1 - base_prob
+        pred = classifier.predict(request.symbol, features, "xgboost")
 
-    # Clamp probability
-    probability = max(0.05, min(0.95, base_prob))
+        if pred is None:
+            raise HTTPException(
+                status_code=500, detail="Model prediction failed"
+            )
 
-    # Add small noise for realism
-    probability += np.random.normal(0, 0.02)
-    probability = max(0.05, min(0.95, probability))
+        return PredictionResponse(
+            symbol=request.symbol,
+            prediction=pred.prediction,
+            probability_up=round(pred.probability, 4),
+            probability_down=round(1 - pred.probability, 4),
+            confidence=round(abs(pred.probability - 0.5) * 2, 4),
+            model_type="xgboost",
+            model_version="v2",
+            disclaimer="ML model trained on historical data. Not financial advice.",
+        )
 
-    prediction = "UP" if probability > 0.5 else "DOWN"
-    confidence = abs(probability - 0.5) * 2  # 0 = uncertain, 1 = very confident
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Gradient Boosting models not available. Install xgboost and lightgbm.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return PredictionResponse(
-        symbol=request.symbol,
-        prediction=prediction,
-        probability_up=round(probability, 4),
-        probability_down=round(1 - probability, 4),
-        confidence=round(confidence, 4),
-        model_version="demo-v1",
-        disclaimer="This is a demonstration model using heuristics. Not financial advice.",
-    )
+
+# =============================================================================
+# NEW ENDPOINTS: Event Study, Regression, Anomaly Detection
+# =============================================================================
+
+@router.post("/event-study", response_model=EventStudyResponse)
+def run_event_study(request: EventStudyRequest):
+    """
+    Run an event study to measure a single event's impact on a market symbol.
+
+    Calculates Cumulative Abnormal Returns (CAR), t-statistics, p-values,
+    and Wilcoxon signed-rank test results.
+    """
+    try:
+        from src.analysis.production_event_study import ProductionEventStudy
+
+        study = ProductionEventStudy()
+        result = study.analyze_event(
+            request.event_id, request.symbol, request.event_date
+        )
+
+        if result is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Insufficient data for event study on {request.symbol} at {request.event_date}",
+            )
+
+        return EventStudyResponse(
+            event_id=result.event_id,
+            symbol=result.symbol,
+            event_date=result.event_date,
+            car=result.car,
+            car_percent=result.car_percent,
+            t_statistic=result.t_statistic,
+            p_value=result.p_value,
+            is_significant=result.is_significant,
+            ci_lower=result.ci_lower,
+            ci_upper=result.ci_upper,
+            expected_return=result.expected_return,
+            actual_return=result.actual_return,
+            std_dev=result.std_dev,
+            wilcoxon_p=result.wilcoxon_p,
+            estimation_days=result.estimation_days,
+            event_days=result.event_days,
+            summary=result.summary,
+        )
+
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Production event study module not available.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Event study failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/regression/{symbol}", response_model=RegressionResponse)
+def run_regression(
+    symbol: str,
+    start_date: date = Query(None, description="Start date (default: 365 days ago)"),
+    end_date: date = Query(None, description="End date (default: today)"),
+):
+    """
+    Run OLS regression analysis for a symbol using statsmodels.
+
+    Analyzes the relationship between geopolitical event features
+    (Goldstein scale, media mentions, tone, conflict count) and
+    market returns.
+
+    Returns coefficients, p-values, R-squared, confidence intervals,
+    and the full statsmodels summary.
+    """
+    try:
+        from src.analysis.production_regression import ProductionRegression
+
+        if end_date is None:
+            end_date = date.today()
+        if start_date is None:
+            start_date = end_date - timedelta(days=365)
+
+        regression = ProductionRegression()
+        result = regression.analyze(symbol, start_date, end_date)
+
+        if result is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Insufficient data for regression on {symbol}",
+            )
+
+        return RegressionResponse(
+            symbol=result.symbol,
+            r_squared=result.r_squared,
+            adj_r_squared=result.adj_r_squared,
+            f_statistic=result.f_statistic,
+            f_pvalue=result.f_pvalue,
+            coefficients=result.coefficients,
+            std_errors=result.std_errors,
+            t_values=result.t_values,
+            p_values=result.p_values,
+            conf_int_lower=result.conf_int_lower,
+            conf_int_upper=result.conf_int_upper,
+            n_observations=result.n_observations,
+            n_features=result.n_features,
+            summary=result.summary,
+        )
+
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Production regression module not available. Install statsmodels.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Regression failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/anomalies/detect", response_model=AnomalyReportResponse)
+def detect_anomalies(
+    symbol: str = Query(..., description="Market symbol to analyze"),
+    days: int = Query(90, ge=7, le=365, description="Number of days to analyze"),
+):
+    """
+    Run production anomaly detection for a symbol using Isolation Forest,
+    Z-score analysis, and event-mismatch detection.
+
+    Returns a full anomaly report with detected anomalies ranked by
+    anomaly probability.
+    """
+    try:
+        from src.analysis.production_anomaly import ProductionAnomalyDetector
+
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        detector = ProductionAnomalyDetector()
+        anomalies = detector.detect_all(symbol, start_date, end_date)
+        report = detector.get_anomaly_report(
+            anomalies, symbol, start_date, end_date
+        )
+
+        return AnomalyReportResponse(
+            symbol=report.symbol,
+            start_date=report.start_date,
+            end_date=report.end_date,
+            total_days=report.total_days,
+            anomaly_count=report.anomaly_count,
+            anomaly_rate=report.anomaly_rate,
+            unexplained_moves=report.unexplained_moves,
+            muted_responses=report.muted_responses,
+            statistical_outliers=report.statistical_outliers,
+            top_anomalies=[
+                AnomalyDetectionResponse(
+                    date=a.date,
+                    symbol=a.symbol,
+                    anomaly_type=a.anomaly_type,
+                    actual_return=a.actual_return,
+                    expected_return=a.expected_return,
+                    z_score=a.z_score,
+                    isolation_score=a.isolation_score,
+                    anomaly_probability=a.anomaly_probability,
+                    event_count=a.event_count,
+                    avg_goldstein=a.avg_goldstein,
+                    detected_by=a.detected_by,
+                )
+                for a in report.top_anomalies
+            ],
+            summary=report.summary,
+        )
+
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Production anomaly detection not available. Install scikit-learn.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Anomaly detection failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/explain/{symbol}", response_model=dict)
+def explain_model(
+    symbol: str,
+    model_type: str = Query("xgboost", description="xgboost or lightgbm"),
+    days: int = Query(365, ge=30, le=730, description="Days of training data"),
+):
+    """
+    Get SHAP explainability report for a trained model.
+
+    Returns global feature importance based on mean absolute SHAP values,
+    feature interactions, and model performance.
+    """
+    try:
+        from src.analysis.explainability import ModelExplainer
+
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        explainer = ModelExplainer()
+        result = explainer.explain_model(symbol, start_date, end_date, model_type)
+
+        if result is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Insufficient data for SHAP analysis on {symbol}",
+            )
+
+        return {
+            "symbol": result.symbol,
+            "model_type": result.model_type,
+            "feature_importance": result.feature_importance,
+            "interactions": dict(list(result.interactions.items())[:10]),
+            "cv_accuracy": result.cv_accuracy,
+            "summary": result.summary,
+        }
+
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="SHAP not available. Install: pip install shap",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SHAP explanation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
