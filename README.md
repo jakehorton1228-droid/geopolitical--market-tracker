@@ -52,6 +52,12 @@ This is a personal learning project focused on building a complete full-stack sy
                            └──────────────────────┘
 
 Data Sources: GDELT (events) + Yahoo Finance (prices)
+
+┌─────────────────────────────────────────────────────────────────┐
+│                  Prefect Orchestration                           │
+│  Daily Pipeline: Ingest Events → Ingest Market → Run Analysis   │
+│  Prefect UI: http://localhost:4200                              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -69,9 +75,10 @@ make up
 make ingest-all
 
 # Access:
-#   Frontend:  http://localhost:3000
-#   API Docs:  http://localhost:8000/docs
-#   Database:  localhost:5432
+#   Frontend:   http://localhost:3000
+#   API Docs:   http://localhost:8000/docs
+#   Prefect UI: http://localhost:4200
+#   Database:   localhost:5432
 ```
 
 ### Option 2: Local Development
@@ -146,9 +153,15 @@ geopolitical-market-tracker/
 │   ├── alembic/                       # Database migrations
 │   ├── scripts/                       # CLI utilities
 │   ├── notebooks/                     # Jupyter notebooks
+│   ├── flows/                         # Prefect pipeline flows
+│   │   ├── ingestion_flow.py          # Daily GDELT + Yahoo Finance ingestion
+│   │   ├── analysis_flow.py           # Daily correlation + pattern computation
+│   │   ├── daily_pipeline.py          # Master flow (ingestion → analysis)
+│   │   └── deploy.py                  # Registers cron schedule
 │   ├── Dockerfile.api                 # Python backend container
+│   ├── Dockerfile.worker              # Prefect worker container
 │   ├── alembic.ini
-│   └── requirements.txt               # 16 Python packages
+│   └── requirements.txt               # Python packages
 │
 ├── frontend/                          # React app (Vite + Tailwind)
 │   └── src/
@@ -161,7 +174,7 @@ geopolitical-market-tracker/
 │       ├── pages/                     # Dashboard, Correlation, Timeline, Map, Signals
 │       └── lib/                       # Constants, formatters
 │
-├── docker-compose.yml                 # 4 services: db, api, frontend, migrate
+├── docker-compose.yml                 # 6 services: db, api, frontend, prefect, worker, migrate
 ├── Dockerfile.frontend                # Multi-stage: Node build → nginx
 ├── nginx.conf                         # SPA routing + API proxy
 └── Makefile                           # Dev and deployment commands
@@ -185,6 +198,10 @@ make dev-frontend    # Run React dev server
 make ingest-events   # Ingest GDELT events (7 days)
 make ingest-market   # Ingest market data (30 days)
 make ingest-all      # Both
+
+# Pipeline
+make pipeline        # Run daily pipeline manually
+make prefect-logs    # View Prefect worker logs
 
 # Testing
 make test            # Run pytest
@@ -212,6 +229,8 @@ make setup           # Full setup
 | `db` | 5432 | PostgreSQL 15 |
 | `api` | 8000 | FastAPI REST API |
 | `frontend` | 3000 | React app via nginx |
+| `prefect-server` | 4200 | Prefect UI + orchestration API |
+| `prefect-worker` | — | Runs scheduled daily pipeline |
 
 ## Data Sources
 

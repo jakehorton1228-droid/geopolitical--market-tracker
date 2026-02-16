@@ -10,7 +10,8 @@
 
 .PHONY: help up down start stop restart logs build clean migrate \
         dev-api dev-frontend dev test lint \
-        ingest-events ingest-market ingest-all
+        ingest-events ingest-market ingest-all \
+        pipeline prefect-logs
 
 # Default target
 .DEFAULT_GOAL := help
@@ -62,9 +63,10 @@ up: ## Start all services (database, API, frontend)
 	@$(MAKE) --no-print-directory _init-db
 	@echo ""
 	@echo "$(GREEN)Services ready!$(NC)"
-	@echo "  Frontend:  http://localhost:3000"
-	@echo "  API Docs:  http://localhost:8000/docs"
-	@echo "  Database:  localhost:5432"
+	@echo "  Frontend:   http://localhost:3000"
+	@echo "  API Docs:   http://localhost:8000/docs"
+	@echo "  Prefect UI: http://localhost:4200"
+	@echo "  Database:   localhost:5432"
 
 _init-db: ## (internal) Run migrations if needed
 	@echo "$(BLUE)Running database migrations...$(NC)"
@@ -175,6 +177,18 @@ m.ingest_all_symbols(date.today() - timedelta(days=30), date.today()); \
 	@echo "$(GREEN)Market data ingestion complete.$(NC)"
 
 ingest-all: ingest-events ingest-market ## Ingest both events and market data
+
+# ============================================================================
+# PREFECT PIPELINE
+# ============================================================================
+
+pipeline: ## Run the daily pipeline manually (ingestion + analysis)
+	@echo "$(BLUE)Running daily pipeline...$(NC)"
+	$(ACTIVATE) python -m flows.daily_pipeline
+	@echo "$(GREEN)Pipeline complete.$(NC)"
+
+prefect-logs: ## View Prefect worker logs
+	docker compose logs -f prefect-worker
 
 # ============================================================================
 # TESTING & LINTING

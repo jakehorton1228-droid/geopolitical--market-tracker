@@ -7,13 +7,16 @@
 #   docker compose down           # Stop all services
 #
 # SERVICES:
-#   - db:       PostgreSQL database (port 5432)
-#   - api:      FastAPI REST API (port 8000)
-#   - frontend: React app via nginx (port 3000)
+#   - db:             PostgreSQL database (port 5432)
+#   - api:            FastAPI REST API (port 8000)
+#   - frontend:       React app via nginx (port 3000)
+#   - prefect-server: Prefect UI + API (port 4200)
+#   - prefect-worker: Runs scheduled daily pipeline
 #
 # ACCESS:
-#   - Frontend:  http://localhost:3000
-#   - API Docs:  http://localhost:8000/docs
+#   - Frontend:    http://localhost:3000
+#   - API Docs:    http://localhost:8000/docs
+#   - Prefect UI:  http://localhost:4200
 
 services:
   # ===========================================================================
@@ -74,6 +77,33 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ===========================================================================
+  # PREFECT ORCHESTRATION
+  # ===========================================================================
+  prefect-server:
+    image: prefecthq/prefect:3-python3.12
+    container_name: gmt-prefect
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+    restart: unless-stopped
+
+  prefect-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: gmt-worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PYTHONPATH: /app
+    depends_on:
+      - prefect-server
+      - db
     restart: unless-stopped
 
   # ===========================================================================
