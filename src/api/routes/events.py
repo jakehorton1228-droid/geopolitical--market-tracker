@@ -182,6 +182,90 @@ def events_by_type(
     ]
 
 
+@router.get("/map", response_model=list[dict])
+def events_for_map(
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    event_group: str | None = Query(None, description="Filter by event group"),
+    min_mentions: int | None = Query(None, description="Minimum media mentions"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get events aggregated by country for map visualization.
+
+    Returns country_code, event counts by group, avg Goldstein, total mentions,
+    and representative lat/long for map pin placement.
+    """
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    query = db.query(Event).filter(
+        Event.event_date >= start_date,
+        Event.event_date <= end_date,
+        Event.action_geo_country_code.isnot(None),
+        Event.action_geo_country_code != "",
+    )
+
+    if event_group:
+        codes = EVENT_GROUPS.get(event_group, [])
+        if codes:
+            query = query.filter(Event.event_root_code.in_(codes))
+
+    if min_mentions is not None:
+        query = query.filter(Event.num_mentions >= min_mentions)
+
+    events = query.all()
+
+    if not events:
+        return []
+
+    # Aggregate by country
+    country_data: dict[str, dict] = {}
+    for e in events:
+        cc = e.action_geo_country_code
+        if cc not in country_data:
+            country_data[cc] = {
+                "country_code": cc,
+                "event_count": 0,
+                "avg_goldstein": 0.0,
+                "total_mentions": 0,
+                "conflict_count": 0,
+                "cooperation_count": 0,
+                "lat": e.action_geo_lat,
+                "long": e.action_geo_long,
+                "_goldstein_sum": 0.0,
+            }
+
+        d = country_data[cc]
+        d["event_count"] += 1
+        d["total_mentions"] += (e.num_mentions or 0)
+        d["_goldstein_sum"] += (e.goldstein_scale or 0)
+
+        group = get_event_group(e.event_root_code) if e.event_root_code else "other"
+        if group in ("violent_conflict", "material_conflict"):
+            d["conflict_count"] += 1
+        elif group in ("verbal_cooperation", "material_cooperation"):
+            d["cooperation_count"] += 1
+
+        # Use first available lat/long per country
+        if d["lat"] is None and e.action_geo_lat is not None:
+            d["lat"] = e.action_geo_lat
+            d["long"] = e.action_geo_long
+
+    # Finalize averages and clean up internal fields
+    results = []
+    for d in country_data.values():
+        if d["event_count"] > 0:
+            d["avg_goldstein"] = round(d["_goldstein_sum"] / d["event_count"], 2)
+        del d["_goldstein_sum"]
+        results.append(d)
+
+    results.sort(key=lambda x: x["event_count"], reverse=True)
+    return results
+
+
 @router.get("/{event_id}", response_model=EventResponse)
 def get_event(
     event_id: int,

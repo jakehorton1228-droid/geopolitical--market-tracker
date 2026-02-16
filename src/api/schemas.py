@@ -187,30 +187,68 @@ class AnomalyResponse(BaseModel):
 
 
 # =============================================================================
-# PREDICTION SCHEMAS
+# PREDICTION SCHEMAS (Logistic Regression - Level 2)
 # =============================================================================
 
-class PredictionRequest(BaseModel):
-    """Request body for market direction prediction."""
+class LogisticPredictionRequest(BaseModel):
+    """Request body for logistic regression prediction."""
     symbol: str = Field(..., description="Market symbol to predict")
-    goldstein_scale: float = Field(..., ge=-10, le=10, description="Event Goldstein score")
-    num_mentions: int = Field(1, ge=1, description="Number of media mentions")
-    avg_tone: float = Field(0, ge=-10, le=10, description="Average media tone")
-    event_root_code: str | None = Field(None, description="CAMEO root code")
-    actor1_country_code: str | None = Field(None, description="Primary actor country")
-    is_violent_conflict: bool = Field(False, description="Is violent conflict event")
+    goldstein_mean: float = Field(0.0, description="Mean Goldstein score of today's events")
+    goldstein_min: float = Field(0.0, description="Min Goldstein score")
+    goldstein_max: float = Field(0.0, description="Max Goldstein score")
+    mentions_total: int = Field(0, ge=0, description="Total media mentions")
+    avg_tone: float = Field(0.0, description="Average media tone")
+    conflict_count: int = Field(0, ge=0, description="Number of conflict events")
+    cooperation_count: int = Field(0, ge=0, description="Number of cooperation events")
+    training_days: int = Field(365, ge=90, le=730, description="Days of training data")
 
 
-class PredictionResponse(BaseModel):
-    """Response from prediction endpoint."""
+class LogisticPredictionResponse(BaseModel):
+    """Response from logistic regression prediction."""
     symbol: str
     prediction: Literal["UP", "DOWN"]
     probability_up: float = Field(..., ge=0, le=1)
     probability_down: float = Field(..., ge=0, le=1)
-    confidence: float = Field(..., ge=0, le=1, description="How confident (0.5 = uncertain)")
-    model_type: str = Field("gradient_boosting", description="Model used for prediction")
-    model_version: str = "v2"
-    disclaimer: str = "This is a demonstration model. Not financial advice."
+    accuracy: float = Field(..., ge=0, le=1, description="Cross-validated accuracy")
+    n_training_samples: int
+    feature_contributions: list[dict]
+    coefficients: dict[str, float]
+    disclaimer: str = "Statistical model for educational purposes. Not financial advice."
+
+
+# =============================================================================
+# HISTORICAL PATTERN SCHEMAS (Level 1)
+# =============================================================================
+
+class HistoricalPatternResponse(BaseModel):
+    """Response from historical frequency pattern analysis."""
+    symbol: str
+    event_filter: str
+    total_occurrences: int
+    up_count: int
+    down_count: int
+    up_percentage: float
+    avg_return_up: float
+    avg_return_down: float
+    avg_return_all: float
+    median_return: float
+    t_statistic: float
+    p_value: float
+    is_significant: bool
+
+
+# =============================================================================
+# CORRELATION SCHEMAS
+# =============================================================================
+
+class CorrelationResponse(BaseModel):
+    """Response from correlation analysis."""
+    symbol: str
+    event_metric: str
+    correlation: float
+    p_value: float
+    n_observations: int
+    method: str
 
 
 # =============================================================================

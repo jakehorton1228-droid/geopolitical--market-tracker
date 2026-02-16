@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from src.db.connection import get_session
-from src.db.models import MarketData
-from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info
+from src.db.models import MarketData, Event
+from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info, SYMBOL_COUNTRY_MAP, get_event_group
 from src.api.schemas import MarketDataResponse
 
 router = APIRouter(prefix="/market", tags=["Market Data"])
@@ -236,3 +236,116 @@ def get_symbol_stats(
         "min_price": float(stats.min_price) if stats.min_price else None,
         "max_price": float(stats.max_price) if stats.max_price else None,
     }
+
+
+@router.get("/{symbol}/with-events", response_model=list[dict])
+def get_symbol_with_events(
+    symbol: str,
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    min_mentions: int = Query(5, ge=0, description="Min mentions to include event"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get price data merged with event summaries by date.
+
+    Powers the Event Timeline chart (price line + event scatter overlay).
+    Each row contains market data plus event aggregates for that day.
+    """
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=180)
+
+    # Fetch market data
+    market_rows = db.query(MarketData).filter(
+        MarketData.symbol == symbol,
+        MarketData.date >= start_date,
+        MarketData.date <= end_date,
+    ).order_by(MarketData.date).all()
+
+    if not market_rows:
+        raise HTTPException(status_code=404, detail=f"No data for '{symbol}'")
+
+    # Fetch relevant events (filtered by countries that matter for this symbol)
+    relevant_countries = SYMBOL_COUNTRY_MAP.get(symbol, [])
+
+    event_query = db.query(Event).filter(
+        Event.event_date >= start_date,
+        Event.event_date <= end_date,
+    )
+
+    if relevant_countries:
+        event_query = event_query.filter(
+            Event.action_geo_country_code.in_(relevant_countries)
+        )
+
+    if min_mentions > 0:
+        event_query = event_query.filter(Event.num_mentions >= min_mentions)
+
+    events = event_query.all()
+
+    # Aggregate events by date
+    events_by_date: dict[date, dict] = {}
+    for e in events:
+        d = e.event_date
+        if d not in events_by_date:
+            events_by_date[d] = {
+                "event_count": 0,
+                "avg_goldstein": 0.0,
+                "total_mentions": 0,
+                "conflict_count": 0,
+                "cooperation_count": 0,
+                "_goldstein_sum": 0.0,
+                "top_event": None,
+            }
+
+        agg = events_by_date[d]
+        agg["event_count"] += 1
+        agg["total_mentions"] += (e.num_mentions or 0)
+        agg["_goldstein_sum"] += (e.goldstein_scale or 0)
+
+        group = get_event_group(e.event_root_code) if e.event_root_code else "other"
+        if group in ("violent_conflict", "material_conflict"):
+            agg["conflict_count"] += 1
+        elif group in ("verbal_cooperation", "material_cooperation"):
+            agg["cooperation_count"] += 1
+
+        # Track highest-mention event as the "top event" for that day
+        if agg["top_event"] is None or (e.num_mentions or 0) > (agg["top_event"].get("mentions", 0)):
+            agg["top_event"] = {
+                "id": e.id,
+                "description": e.action_geo_name or "",
+                "goldstein": e.goldstein_scale,
+                "mentions": e.num_mentions or 0,
+                "group": group,
+            }
+
+    # Build response: market data + event overlay
+    result = []
+    for m in market_rows:
+        row = {
+            "date": str(m.date),
+            "close": float(m.close),
+            "open": float(m.open) if m.open else None,
+            "high": float(m.high) if m.high else None,
+            "low": float(m.low) if m.low else None,
+            "volume": m.volume,
+            "daily_return": m.daily_return,
+        }
+
+        event_agg = events_by_date.get(m.date)
+        if event_agg:
+            ec = event_agg["event_count"]
+            row["event_count"] = ec
+            row["avg_goldstein"] = round(event_agg["_goldstein_sum"] / ec, 2) if ec > 0 else 0
+            row["total_mentions"] = event_agg["total_mentions"]
+            row["conflict_count"] = event_agg["conflict_count"]
+            row["cooperation_count"] = event_agg["cooperation_count"]
+            row["top_event"] = event_agg["top_event"]
+        else:
+            row["event_count"] = 0
+
+        result.append(row)
+
+    return result

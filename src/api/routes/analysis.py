@@ -1,14 +1,13 @@
 """
 Analysis API Router.
 
-Endpoints for querying analysis results and making predictions.
+Endpoints for querying analysis results.
 
 USAGE:
 ------
     GET /api/analysis/results - List event study results
     GET /api/analysis/anomalies - List detected anomalies
     GET /api/analysis/significant - List significant results
-    POST /api/analysis/predict - Predict market direction
     POST /api/analysis/event-study - Run event study on demand
     GET /api/analysis/regression/{symbol} - Run regression analysis
     GET /api/analysis/anomalies/detect - Run production anomaly detection
@@ -25,13 +24,10 @@ from src.db.models import Event, AnalysisResult
 from src.config.constants import CAMEO_CATEGORIES, get_event_group
 from src.api.schemas import (
     AnalysisResultResponse,
-    AnomalyResponse,
     AnomalyDetectionResponse,
     AnomalyReportResponse,
     EventStudyRequest,
     EventStudyResponse,
-    PredictionRequest,
-    PredictionResponse,
     RegressionResponse,
 )
 
@@ -218,91 +214,8 @@ def analysis_summary(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/predict", response_model=PredictionResponse)
-def predict_market_direction(request: PredictionRequest):
-    """
-    Predict market direction based on event characteristics.
-
-    Uses a trained Gradient Boosting model (XGBoost) for real ML predictions.
-    The model is trained on historical event-market data each time a prediction
-    is requested, using the last 365 days of data.
-
-    **Input:**
-    - `symbol`: Market to predict (e.g., CL=F, SPY)
-    - `goldstein_scale`: Event severity (-10 to +10)
-    - `num_mentions`: Media coverage
-    - `avg_tone`: Media sentiment
-    - `is_violent_conflict`: Whether event involves violence
-
-    **Output:**
-    - `prediction`: UP or DOWN
-    - `probability_up`: Probability of upward move
-    - `confidence`: How confident the model is
-    - `model_type`: Which model was used
-    """
-    try:
-        from src.analysis.gradient_boost_classifier import GradientBoostClassifier
-
-        end_date = date.today()
-        start_date = end_date - timedelta(days=365)
-
-        classifier = GradientBoostClassifier(
-            n_estimators=100, learning_rate=0.1, max_depth=5
-        )
-        comparison = classifier.train_and_compare(
-            request.symbol, start_date, end_date
-        )
-
-        if comparison is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Insufficient data to train model for {request.symbol}",
-            )
-
-        features = {
-            "goldstein_mean": request.goldstein_scale,
-            "goldstein_min": request.goldstein_scale - 2,
-            "goldstein_max": request.goldstein_scale + 2,
-            "goldstein_std": 2.0,
-            "mentions_total": request.num_mentions,
-            "mentions_max": max(1, request.num_mentions // 3),
-            "avg_tone": request.avg_tone,
-            "conflict_count": 3 if request.is_violent_conflict else 0,
-            "cooperation_count": 0 if request.is_violent_conflict else 2,
-        }
-
-        pred = classifier.predict(request.symbol, features, "xgboost")
-
-        if pred is None:
-            raise HTTPException(
-                status_code=500, detail="Model prediction failed"
-            )
-
-        return PredictionResponse(
-            symbol=request.symbol,
-            prediction=pred.prediction,
-            probability_up=round(pred.probability, 4),
-            probability_down=round(1 - pred.probability, 4),
-            confidence=round(abs(pred.probability - 0.5) * 2, 4),
-            model_type="xgboost",
-            model_version="v2",
-            disclaimer="ML model trained on historical data. Not financial advice.",
-        )
-
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="Gradient Boosting models not available. Install xgboost and lightgbm.",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # =============================================================================
-# NEW ENDPOINTS: Event Study, Regression, Anomaly Detection
+# Event Study, Regression, Anomaly Detection
 # =============================================================================
 
 @router.post("/event-study", response_model=EventStudyResponse)
@@ -486,49 +399,3 @@ def detect_anomalies(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/explain/{symbol}", response_model=dict)
-def explain_model(
-    symbol: str,
-    model_type: str = Query("xgboost", description="xgboost or lightgbm"),
-    days: int = Query(365, ge=30, le=730, description="Days of training data"),
-):
-    """
-    Get SHAP explainability report for a trained model.
-
-    Returns global feature importance based on mean absolute SHAP values,
-    feature interactions, and model performance.
-    """
-    try:
-        from src.analysis.explainability import ModelExplainer
-
-        end_date = date.today()
-        start_date = end_date - timedelta(days=days)
-
-        explainer = ModelExplainer()
-        result = explainer.explain_model(symbol, start_date, end_date, model_type)
-
-        if result is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Insufficient data for SHAP analysis on {symbol}",
-            )
-
-        return {
-            "symbol": result.symbol,
-            "model_type": result.model_type,
-            "feature_importance": result.feature_importance,
-            "interactions": dict(list(result.interactions.items())[:10]),
-            "cv_accuracy": result.cv_accuracy,
-            "summary": result.summary,
-        }
-
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="SHAP not available. Install: pip install shap",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"SHAP explanation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

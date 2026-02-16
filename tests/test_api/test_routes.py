@@ -70,36 +70,38 @@ class TestAnalysisRoutes:
 class TestSchemas:
     """Tests for Pydantic request/response schemas."""
 
-    def test_prediction_request_validation(self):
-        """PredictionRequest should validate fields."""
-        from src.api.schemas import PredictionRequest
+    def test_logistic_prediction_request_validation(self):
+        """LogisticPredictionRequest should validate fields."""
+        from src.api.schemas import LogisticPredictionRequest
 
-        req = PredictionRequest(
+        req = LogisticPredictionRequest(
             symbol="SPY",
-            goldstein_scale=-5.0,
-            num_mentions=50,
-            event_root_code="18",
+            goldstein_mean=-5.0,
+            mentions_total=50,
+            conflict_count=3,
         )
 
         assert req.symbol == "SPY"
-        assert req.goldstein_scale == -5.0
+        assert req.goldstein_mean == -5.0
 
-    def test_prediction_response_creation(self):
-        """PredictionResponse should accept all fields."""
-        from src.api.schemas import PredictionResponse
+    def test_logistic_prediction_response_creation(self):
+        """LogisticPredictionResponse should accept all fields."""
+        from src.api.schemas import LogisticPredictionResponse
 
-        resp = PredictionResponse(
+        resp = LogisticPredictionResponse(
             symbol="SPY",
             prediction="DOWN",
             probability_up=0.28,
             probability_down=0.72,
-            confidence=0.72,
-            model_type="xgboost",
+            accuracy=0.54,
+            n_training_samples=200,
+            feature_contributions=[],
+            coefficients={"goldstein_mean": -0.15},
         )
 
         assert resp.prediction == "DOWN"
-        assert resp.confidence == 0.72
-        assert resp.model_type == "xgboost"
+        assert resp.accuracy == 0.54
+        assert resp.probability_down == 0.72
 
     def test_regression_response_creation(self):
         """RegressionResponse should accept all fields."""

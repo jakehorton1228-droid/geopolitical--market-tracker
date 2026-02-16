@@ -4,8 +4,8 @@ Analysis Module.
 This module provides tools for analyzing relationships between
 geopolitical events and market movements.
 
-FOUR MAIN ANALYSES:
--------------------
+ANALYSES:
+---------
 1. Event Study: "Did this event move the market?"
    - Calculates Cumulative Abnormal Returns (CAR)
    - Tests statistical significance
@@ -15,24 +15,16 @@ FOUR MAIN ANALYSES:
    - Finds muted responses to major events
 
 3. Regression: "What event characteristics predict market moves?"
-   - Multiple regression analysis
+   - OLS and logistic regression
    - Identifies which factors matter most
 
-4. Classification: "Will the market go UP or DOWN?"
-   - Gradient boosted models for direction prediction
-   - Covers all 33 tracked markets
-   - Provides interpretable predictions with confidence scores
+4. Correlation: "How do events and prices move together?"
+   - Pearson/Spearman correlation analysis
+   - Rolling correlation windows
 
-USAGE:
-------
-    from src.analysis import ProductionEventStudy, ProductionRegression
-
-    study = ProductionEventStudy()
-    result = study.analyze_event(event_id, symbol, event_date)
-
-    reg = ProductionRegression()
-    result = reg.analyze(symbol, start_date, end_date)
-    print(result.summary)
+5. Historical Patterns: "What happened historically?"
+   - Conditional probability lookups
+   - "When X happens, Y goes UP Z% of the time"
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -24,7 +24,14 @@ import time
 
 from sqlalchemy import text
 
-from src.api.routes import events_router, market_router, analysis_router
+from src.api.routes import (
+    events_router,
+    market_router,
+    analysis_router,
+    correlation_router,
+    patterns_router,
+    predictions_router,
+)
 from src.api.schemas import HealthResponse, ErrorResponse
 from src.db.connection import get_session
 
@@ -139,6 +146,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(events_router, prefix="/api")
 app.include_router(market_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(correlation_router, prefix="/api")
+app.include_router(patterns_router, prefix="/api")
+app.include_router(predictions_router, prefix="/api")
 
 
 # =============================================================================
@@ -161,6 +171,9 @@ def root():
             "events": "/api/events",
             "market": "/api/market",
             "analysis": "/api/analysis",
+            "correlation": "/api/correlation",
+            "patterns": "/api/patterns",
+            "predictions": "/api/predictions",
             "health": "/health",
         },
     }

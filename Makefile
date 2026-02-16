@@ -4,14 +4,13 @@
 #   make help       - Show available commands
 #   make up         - Start all services
 #   make down       - Stop all services
-#   make logs       - View logs
+#   make dev        - Run API + frontend in dev mode
 #
 # ============================================================================
 
 .PHONY: help up down start stop restart logs build clean migrate \
-        dev-api dev-dashboard dev test lint \
-        ingest-events ingest-market \
-        prefect-server prefect-worker pipeline pipeline-deploy
+        dev-api dev-frontend dev test lint \
+        ingest-events ingest-market ingest-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -33,26 +32,23 @@ help: ## Show this help message
 	@echo "=============================="
 	@echo ""
 	@echo "$(GREEN)Docker Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(up|down|start|stop|restart|logs|build|clean|migrate)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(up|down|start|stop|restart|logs|build|clean|migrate|status)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Development Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(dev-)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(dev)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Data Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(ingest-)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
-	@echo ""
-	@echo "$(GREEN)Prefect Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(prefect-|pipeline)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '(ingest)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Other Commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '(up|down|start|stop|restart|logs|build|clean|migrate|dev-|ingest-|prefect-|pipeline)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -vE '(up|down|start|stop|restart|logs|build|clean|migrate|status|dev|ingest)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
 # ============================================================================
 # DOCKER - FULL STACK
 # ============================================================================
 
-up: ## Start all services (database, API, dashboard)
+up: ## Start all services (database, API, frontend)
 	@echo "$(GREEN)Starting all services...$(NC)"
 	docker compose up -d
 	@echo "$(YELLOW)Waiting for database to be healthy...$(NC)"
@@ -60,11 +56,11 @@ up: ## Start all services (database, API, dashboard)
 	@$(MAKE) --no-print-directory _init-db
 	@echo ""
 	@echo "$(GREEN)Services ready!$(NC)"
-	@echo "  Dashboard: http://localhost:8501"
+	@echo "  Frontend:  http://localhost:3000"
 	@echo "  API Docs:  http://localhost:8000/docs"
 	@echo "  Database:  localhost:5432"
 
-_init-db: ## (internal) Run migrations and ingest data if needed
+_init-db: ## (internal) Run migrations if needed
 	@echo "$(BLUE)Running database migrations...$(NC)"
 	@. venv/bin/activate && alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied or venv not found$(NC)"
 	@EVENT_COUNT=$$(docker exec gmt-db psql -U postgres -d geopolitical_tracker -t -c "SELECT COUNT(*) FROM events;" 2>/dev/null | tr -d ' ' || echo "0"); \
@@ -94,9 +90,6 @@ logs: ## View logs from all services (follow mode)
 
 logs-api: ## View API logs only
 	docker compose logs -f api
-
-logs-dashboard: ## View dashboard logs only
-	docker compose logs -f dashboard
 
 logs-db: ## View database logs only
 	docker compose logs -f db
@@ -133,26 +126,22 @@ up-api: ## Start database and API
 	@echo "$(GREEN)API started on http://localhost:8000$(NC)"
 
 # ============================================================================
-# LOCAL DEVELOPMENT (without Docker)
+# LOCAL DEVELOPMENT (without Docker for API/frontend, DB via Docker)
 # ============================================================================
 
 dev-api: ## Run API locally (requires venv and running DB)
 	@echo "$(BLUE)Starting API in development mode...$(NC)"
 	. venv/bin/activate && uvicorn src.api.main:app --reload --port 8000
 
-dev-dashboard: ## Run dashboard locally (direct DB mode)
-	@echo "$(BLUE)Starting dashboard in development mode...$(NC)"
-	. venv/bin/activate && streamlit run dashboard/app.py
+dev-frontend: ## Run React frontend in dev mode
+	@echo "$(BLUE)Starting frontend in development mode...$(NC)"
+	cd frontend && npm run dev
 
-dev-dashboard-api: ## Run dashboard locally (API mode)
-	@echo "$(BLUE)Starting dashboard in API mode...$(NC)"
-	. venv/bin/activate && USE_API=true API_URL=http://localhost:8000 streamlit run dashboard/app.py
-
-dev: ## Run both API and dashboard locally (requires 2 terminals)
+dev: ## Instructions for running both API and frontend locally
 	@echo "$(YELLOW)Run these commands in separate terminals:$(NC)"
 	@echo ""
-	@echo "  Terminal 1 (API):       make dev-api"
-	@echo "  Terminal 2 (Dashboard): make dev-dashboard"
+	@echo "  Terminal 1 (API):      make dev-api"
+	@echo "  Terminal 2 (Frontend): make dev-frontend"
 	@echo ""
 
 # ============================================================================
@@ -189,14 +178,14 @@ test: ## Run tests
 	@echo "$(BLUE)Running tests...$(NC)"
 	. venv/bin/activate && pytest tests/ -v
 
-lint: ## Run linters (black, flake8)
+lint: ## Run linters
 	@echo "$(BLUE)Running linters...$(NC)"
-	. venv/bin/activate && black --check src/ dashboard/
-	. venv/bin/activate && flake8 src/ dashboard/
+	. venv/bin/activate && black --check src/
+	. venv/bin/activate && flake8 src/
 
 format: ## Format code with black
 	@echo "$(BLUE)Formatting code...$(NC)"
-	. venv/bin/activate && black src/ dashboard/
+	. venv/bin/activate && black src/
 	@echo "$(GREEN)Formatting complete.$(NC)"
 
 # ============================================================================
@@ -208,6 +197,11 @@ install: ## Install Python dependencies
 	pip install -r requirements.txt
 	@echo "$(GREEN)Dependencies installed.$(NC)"
 
+install-frontend: ## Install frontend dependencies
+	@echo "$(BLUE)Installing frontend dependencies...$(NC)"
+	cd frontend && npm install --legacy-peer-deps
+	@echo "$(GREEN)Frontend dependencies installed.$(NC)"
+
 setup: ## Full setup: install deps, start DB, run migrations
 	@echo "$(BLUE)Running full setup...$(NC)"
 	$(MAKE) install
@@ -216,87 +210,3 @@ setup: ## Full setup: install deps, start DB, run migrations
 	sleep 5
 	. venv/bin/activate && alembic upgrade head
 	@echo "$(GREEN)Setup complete! Run 'make up' to start all services.$(NC)"
-
-# ============================================================================
-# PREFECT ORCHESTRATION (Local - without Docker)
-# ============================================================================
-
-prefect-server: ## Start Prefect server locally (UI at http://localhost:4200)
-	@echo "$(BLUE)Starting Prefect server...$(NC)"
-	@echo "$(GREEN)Prefect UI will be available at: http://localhost:4200$(NC)"
-	. venv/bin/activate && prefect server start
-
-prefect-worker: ## Start Prefect worker locally
-	@echo "$(BLUE)Starting Prefect worker...$(NC)"
-	. venv/bin/activate && prefect worker start -p 'default-agent-pool'
-
-pipeline: ## Run the daily pipeline locally
-	@echo "$(BLUE)Running daily pipeline...$(NC)"
-	. venv/bin/activate && python flows/daily_pipeline.py
-	@echo "$(GREEN)Pipeline complete.$(NC)"
-
-pipeline-deploy: ## Create Prefect deployments locally
-	@echo "$(BLUE)Creating Prefect deployments...$(NC)"
-	. venv/bin/activate && python flows/daily_pipeline.py --deploy
-	. venv/bin/activate && python flows/ingest_events.py --deploy
-	. venv/bin/activate && python flows/ingest_market.py --deploy
-	. venv/bin/activate && python flows/run_analysis.py --deploy
-	@echo "$(GREEN)Deployments created!$(NC)"
-	@echo ""
-	@echo "$(YELLOW)Next steps:$(NC)"
-	@echo "  1. Start Prefect server:  make prefect-server"
-	@echo "  2. Start worker:          make prefect-worker"
-	@echo "  3. View UI:               http://localhost:4200"
-
-pipeline-events: ## Run only event ingestion flow locally
-	@echo "$(BLUE)Running event ingestion flow...$(NC)"
-	. venv/bin/activate && python flows/ingest_events.py --days 7
-
-pipeline-market: ## Run only market data ingestion flow locally
-	@echo "$(BLUE)Running market data ingestion flow...$(NC)"
-	. venv/bin/activate && python flows/ingest_market.py --days 30
-
-pipeline-analysis: ## Run only analysis flow locally
-	@echo "$(BLUE)Running analysis flow...$(NC)"
-	. venv/bin/activate && python flows/run_analysis.py --days 30
-
-# ============================================================================
-# PREFECT ORCHESTRATION (Docker - containerized)
-# ============================================================================
-
-up-prefect: ## Start Prefect server and worker in Docker
-	@echo "$(BLUE)Starting Prefect services...$(NC)"
-	docker compose --profile prefect up -d
-	@echo ""
-	@echo "$(GREEN)Prefect services started!$(NC)"
-	@echo "  Prefect UI: http://localhost:4200"
-	@echo ""
-	@echo "$(YELLOW)To create scheduled deployments, run:$(NC)"
-	@echo "  make prefect-deploy-docker"
-
-down-prefect: ## Stop Prefect services
-	@echo "$(YELLOW)Stopping Prefect services...$(NC)"
-	docker compose --profile prefect down
-	@echo "$(GREEN)Prefect services stopped.$(NC)"
-
-prefect-deploy-docker: ## Create Prefect deployments in Docker
-	@echo "$(BLUE)Creating Prefect deployments...$(NC)"
-	docker compose --profile prefect-setup up prefect-deploy
-	@echo "$(GREEN)Deployments created!$(NC)"
-
-pipeline-docker: ## Run daily pipeline in Docker (one-time)
-	@echo "$(BLUE)Running daily pipeline in Docker...$(NC)"
-	docker compose --profile pipeline up pipeline
-	@echo "$(GREEN)Pipeline complete.$(NC)"
-
-logs-prefect: ## View Prefect logs
-	docker compose --profile prefect logs -f prefect-server prefect-worker
-
-up-all: ## Start ALL services including Prefect
-	@echo "$(GREEN)Starting all services...$(NC)"
-	docker compose --profile prefect up -d
-	@echo ""
-	@echo "$(GREEN)All services started!$(NC)"
-	@echo "  Dashboard:  http://localhost:8501"
-	@echo "  API Docs:   http://localhost:8000/docs"
-	@echo "  Prefect UI: http://localhost:4200"

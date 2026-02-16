@@ -291,3 +291,167 @@ def print_interpretation(result: ProdRegressionResult) -> None:
     if result.r_squared < 0.05:
         print(f"\n  Note: Low R² ({result.r_squared:.1%}) is normal for daily returns.")
         print("  Markets are affected by many factors beyond geopolitical events.")
+
+
+# =============================================================================
+# LOGISTIC REGRESSION (Level 2 Prediction)
+# =============================================================================
+
+@dataclass
+class LogisticRegressionResult:
+    """Container for logistic regression prediction results."""
+    symbol: str
+    prediction: str  # "UP" or "DOWN"
+    probability_up: float
+    coefficients: dict[str, float]
+    feature_contributions: list[dict]
+    accuracy: float
+    n_training_samples: int
+
+
+class LogisticRegressionAnalyzer:
+    """
+    Logistic regression for binary market direction prediction.
+
+    Uses sklearn's LogisticRegression for interpretable UP/DOWN predictions.
+    Each coefficient tells a clear story about which event features
+    push the market up or down.
+    """
+
+    def __init__(self):
+        self.feature_names: list[str] = []
+
+    def train_and_predict(
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        current_features: dict[str, float],
+    ) -> Optional[LogisticRegressionResult]:
+        """
+        Train logistic regression on historical data, then predict
+        for the given current event features.
+
+        Args:
+            symbol: Market symbol to predict
+            start_date: Start of training period
+            end_date: End of training period
+            current_features: Dict of feature values for prediction
+                e.g. {"goldstein_mean": -5.0, "mentions_total": 100, ...}
+        """
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.model_selection import cross_val_score
+        from sklearn.preprocessing import StandardScaler
+
+        from src.analysis.feature_engineering import FeatureEngineering
+
+        fe = FeatureEngineering()
+        X, y, feature_names = fe.prepare_classification_features(
+            symbol, start_date, end_date
+        )
+
+        if len(X) < 30:
+            logger.warning(f"Insufficient data for {symbol}: {len(X)} samples")
+            return None
+
+        self.feature_names = feature_names
+
+        # Scale features for better convergence
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        # Train logistic regression
+        model = LogisticRegression(max_iter=1000, random_state=42)
+        model.fit(X_scaled, y)
+
+        # Cross-validated accuracy
+        cv_scores = cross_val_score(model, X_scaled, y, cv=5, scoring="accuracy")
+        accuracy = float(cv_scores.mean())
+
+        # Prepare current features for prediction
+        feature_vector = np.array([
+            current_features.get(name, 0.0) for name in feature_names
+        ]).reshape(1, -1)
+        feature_vector_scaled = scaler.transform(feature_vector)
+
+        # Predict
+        prob = model.predict_proba(feature_vector_scaled)[0]
+        prob_up = float(prob[1]) if len(prob) > 1 else float(prob[0])
+        prediction = "UP" if prob_up >= 0.5 else "DOWN"
+
+        # Extract coefficients
+        coefficients = dict(zip(feature_names, model.coef_[0]))
+
+        # Compute per-feature contribution (coefficient * scaled feature value)
+        scaled_values = feature_vector_scaled[0]
+        contributions = []
+        for i, name in enumerate(feature_names):
+            contrib = float(model.coef_[0][i] * scaled_values[i])
+            contributions.append({
+                "feature": name,
+                "coefficient": float(model.coef_[0][i]),
+                "value": current_features.get(name, 0.0),
+                "contribution": contrib,
+            })
+
+        # Sort by absolute contribution
+        contributions.sort(key=lambda x: abs(x["contribution"]), reverse=True)
+
+        return LogisticRegressionResult(
+            symbol=symbol,
+            prediction=prediction,
+            probability_up=prob_up,
+            coefficients=coefficients,
+            feature_contributions=contributions,
+            accuracy=accuracy,
+            n_training_samples=len(X),
+        )
+
+    def get_model_summary(
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> Optional[dict]:
+        """
+        Get model fit statistics without making a prediction.
+
+        Returns coefficients, accuracy, and feature importance for display.
+        """
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.model_selection import cross_val_score
+        from sklearn.preprocessing import StandardScaler
+
+        from src.analysis.feature_engineering import FeatureEngineering
+
+        fe = FeatureEngineering()
+        X, y, feature_names = fe.prepare_classification_features(
+            symbol, start_date, end_date
+        )
+
+        if len(X) < 30:
+            return None
+
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        model = LogisticRegression(max_iter=1000, random_state=42)
+        model.fit(X_scaled, y)
+
+        cv_scores = cross_val_score(model, X_scaled, y, cv=5, scoring="accuracy")
+
+        coefficients = dict(zip(feature_names, model.coef_[0].tolist()))
+        abs_coefs = {k: abs(v) for k, v in coefficients.items()}
+
+        return {
+            "symbol": symbol,
+            "coefficients": coefficients,
+            "feature_importance": dict(
+                sorted(abs_coefs.items(), key=lambda x: x[1], reverse=True)
+            ),
+            "intercept": float(model.intercept_[0]),
+            "accuracy": float(cv_scores.mean()),
+            "accuracy_std": float(cv_scores.std()),
+            "n_training_samples": len(X),
+            "up_ratio": float(y.mean()),
+        }
