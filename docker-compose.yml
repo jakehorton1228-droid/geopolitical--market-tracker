@@ -42,7 +42,7 @@ services:
   # ===========================================================================
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.api
     container_name: gmt-api
     environment:
@@ -81,7 +81,7 @@ services:
   # ===========================================================================
   migrate:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.api
     container_name: gmt-migrate
     environment:

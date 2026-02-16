@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Base paths
+# Base paths — points to backend/ directory (parent of src/)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Load environment variables from .env file
+# Search backend/ first, then repo root (parent of backend/)
+load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(PROJECT_ROOT.parent / ".env")
 DATA_DIR = PROJECT_ROOT / "data"
 
 # Database

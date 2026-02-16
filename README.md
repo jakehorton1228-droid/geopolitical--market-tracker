@@ -80,11 +80,11 @@ make ingest-all
 # Setup backend
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Start database
 make up-db
-alembic upgrade head
+cd backend && alembic upgrade head && cd ..
 
 # Setup frontend
 cd frontend && npm install --legacy-peer-deps && cd ..
@@ -126,39 +126,45 @@ Full interactive docs at `http://localhost:8000/docs`.
 
 ```
 geopolitical-market-tracker/
-├── frontend/                      # React app (Vite + Tailwind)
+├── backend/                          # Python backend
+│   ├── src/
+│   │   ├── analysis/
+│   │   │   ├── correlation.py         # Pearson/Spearman correlation
+│   │   │   ├── historical_patterns.py # Level 1: conditional probability
+│   │   │   ├── production_regression.py # OLS + Level 2: logistic regression
+│   │   │   ├── production_event_study.py # Cumulative Abnormal Returns
+│   │   │   ├── production_anomaly.py  # Z-score anomaly detection
+│   │   │   └── feature_engineering.py # Shared data preparation
+│   │   ├── api/
+│   │   │   ├── main.py                # FastAPI app + middleware
+│   │   │   ├── schemas.py             # Pydantic models
+│   │   │   └── routes/                # 6 routers, 34 endpoints
+│   │   ├── db/                        # SQLAlchemy models + queries
+│   │   ├── config/                    # Constants, symbol mappings
+│   │   └── ingestion/                 # GDELT + Yahoo Finance ETL
+│   ├── tests/                         # Backend tests
+│   ├── alembic/                       # Database migrations
+│   ├── scripts/                       # CLI utilities
+│   ├── notebooks/                     # Jupyter notebooks
+│   ├── Dockerfile.api                 # Python backend container
+│   ├── alembic.ini
+│   └── requirements.txt               # 16 Python packages
+│
+├── frontend/                          # React app (Vite + Tailwind)
 │   └── src/
-│       ├── api/                   # Axios client + React Query hooks
+│       ├── api/                       # Axios client + React Query hooks
 │       ├── components/
-│       │   ├── layout/            # AppShell, Sidebar
-│       │   ├── charts/            # PriceEventOverlay, Heatmap, Bar
-│       │   ├── cards/             # MetricCard, PatternCard, PredictionCard
-│       │   └── shared/            # SymbolSelector, DateRangePicker
-│       ├── pages/                 # Dashboard, Correlation, Timeline, Map, Signals
-│       └── lib/                   # Constants, formatters
+│       │   ├── layout/                # AppShell, Sidebar
+│       │   ├── charts/                # PriceEventOverlay, Heatmap, Bar
+│       │   ├── cards/                 # MetricCard, PatternCard, PredictionCard
+│       │   └── shared/                # SymbolSelector, DateRangePicker
+│       ├── pages/                     # Dashboard, Correlation, Timeline, Map, Signals
+│       └── lib/                       # Constants, formatters
 │
-├── src/                           # Python backend
-│   ├── analysis/
-│   │   ├── correlation.py         # Pearson/Spearman correlation
-│   │   ├── historical_patterns.py # Level 1: conditional probability
-│   │   ├── production_regression.py # OLS + Level 2: logistic regression
-│   │   ├── production_event_study.py # Cumulative Abnormal Returns
-│   │   ├── production_anomaly.py  # Z-score anomaly detection
-│   │   └── feature_engineering.py # Shared data preparation
-│   ├── api/
-│   │   ├── main.py                # FastAPI app + middleware
-│   │   ├── schemas.py             # Pydantic models
-│   │   └── routes/                # 6 routers, 34 endpoints
-│   ├── db/                        # SQLAlchemy models + queries
-│   ├── config/                    # Constants, symbol mappings
-│   └── ingestion/                 # GDELT + Yahoo Finance ETL
-│
-├── docker-compose.yml             # 4 services: db, api, frontend, migrate
-├── Dockerfile.api                 # Python backend container
-├── Dockerfile.frontend            # Multi-stage: Node build → nginx
-├── nginx.conf                     # SPA routing + API proxy
-├── Makefile                       # Dev and deployment commands
-└── requirements.txt               # 16 Python packages
+├── docker-compose.yml                 # 4 services: db, api, frontend, migrate
+├── Dockerfile.frontend                # Multi-stage: Node build → nginx
+├── nginx.conf                         # SPA routing + API proxy
+└── Makefile                           # Dev and deployment commands
 ```
 
 ## Makefile Commands

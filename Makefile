@@ -22,6 +22,12 @@ YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
 
+# Backend directory
+BACKEND := backend
+
+# Activate venv with backend on PYTHONPATH
+ACTIVATE := . venv/bin/activate && PYTHONPATH=$(BACKEND)
+
 # ============================================================================
 # HELP
 # ============================================================================
@@ -62,7 +68,7 @@ up: ## Start all services (database, API, frontend)
 
 _init-db: ## (internal) Run migrations if needed
 	@echo "$(BLUE)Running database migrations...$(NC)"
-	@. venv/bin/activate && alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied or venv not found$(NC)"
+	@. venv/bin/activate && cd $(BACKEND) && alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied or venv not found$(NC)"
 	@EVENT_COUNT=$$(docker exec gmt-db psql -U postgres -d geopolitical_tracker -t -c "SELECT COUNT(*) FROM events;" 2>/dev/null | tr -d ' ' || echo "0"); \
 	if [ "$$EVENT_COUNT" = "0" ] || [ -z "$$EVENT_COUNT" ]; then \
 		echo "$(BLUE)No events found. Ingesting initial data...$(NC)"; \
@@ -131,7 +137,7 @@ up-api: ## Start database and API
 
 dev-api: ## Run API locally (requires venv and running DB)
 	@echo "$(BLUE)Starting API in development mode...$(NC)"
-	. venv/bin/activate && uvicorn src.api.main:app --reload --port 8000
+	$(ACTIVATE) uvicorn src.api.main:app --reload --port 8000
 
 dev-frontend: ## Run React frontend in dev mode
 	@echo "$(BLUE)Starting frontend in development mode...$(NC)"
@@ -150,7 +156,7 @@ dev: ## Instructions for running both API and frontend locally
 
 ingest-events: ## Ingest GDELT events (last 7 days)
 	@echo "$(BLUE)Ingesting GDELT events...$(NC)"
-	. venv/bin/activate && python -c "\
+	$(ACTIVATE) python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.gdelt import GDELTIngestion; \
 g = GDELTIngestion(); \
@@ -160,7 +166,7 @@ g.ingest_date_range(date.today() - timedelta(days=7), date.today() - timedelta(d
 
 ingest-market: ## Ingest market data (last 30 days)
 	@echo "$(BLUE)Ingesting market data...$(NC)"
-	. venv/bin/activate && python -c "\
+	$(ACTIVATE) python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.market_data import MarketDataIngestion; \
 m = MarketDataIngestion(); \
@@ -176,16 +182,16 @@ ingest-all: ingest-events ingest-market ## Ingest both events and market data
 
 test: ## Run tests
 	@echo "$(BLUE)Running tests...$(NC)"
-	. venv/bin/activate && pytest tests/ -v
+	$(ACTIVATE) pytest $(BACKEND)/tests/ -v
 
 lint: ## Run linters
 	@echo "$(BLUE)Running linters...$(NC)"
-	. venv/bin/activate && black --check src/
-	. venv/bin/activate && flake8 src/
+	$(ACTIVATE) black --check $(BACKEND)/src/
+	$(ACTIVATE) flake8 $(BACKEND)/src/
 
 format: ## Format code with black
 	@echo "$(BLUE)Formatting code...$(NC)"
-	. venv/bin/activate && black src/
+	$(ACTIVATE) black $(BACKEND)/src/
 	@echo "$(GREEN)Formatting complete.$(NC)"
 
 # ============================================================================
@@ -194,7 +200,7 @@ format: ## Format code with black
 
 install: ## Install Python dependencies
 	@echo "$(BLUE)Installing dependencies...$(NC)"
-	pip install -r requirements.txt
+	pip install -r $(BACKEND)/requirements.txt
 	@echo "$(GREEN)Dependencies installed.$(NC)"
 
 install-frontend: ## Install frontend dependencies
@@ -208,5 +214,5 @@ setup: ## Full setup: install deps, start DB, run migrations
 	$(MAKE) up-db
 	@echo "$(YELLOW)Waiting for database to be ready...$(NC)"
 	sleep 5
-	. venv/bin/activate && alembic upgrade head
+	. venv/bin/activate && cd $(BACKEND) && alembic upgrade head
 	@echo "$(GREEN)Setup complete! Run 'make up' to start all services.$(NC)"
