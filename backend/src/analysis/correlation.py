@@ -59,27 +59,40 @@ class CorrelationAnalyzer:
     def __init__(self):
         self.fe = FeatureEngineering()
 
+    def _get_event_agg(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> pd.DataFrame:
+        """Fetch and aggregate events once for reuse across symbols."""
+        events_df = self.fe.fetch_events(start_date, end_date, include_cooperation=True)
+        if events_df.empty:
+            return pd.DataFrame()
+
+        return self.fe.aggregate_events(
+            events_df,
+            goldstein_metrics=["mean"],
+            mention_metrics=["sum"],
+            include_cooperation=True,
+        )
+
     def _get_merged_data(
         self,
         symbol: str,
         start_date: date,
         end_date: date,
+        event_agg: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """Fetch and merge market + event data into a single DataFrame."""
         market_df = self.fe.fetch_market_data(symbol, start_date, end_date)
         if market_df.empty:
             return pd.DataFrame()
 
-        events_df = self.fe.fetch_events(start_date, end_date, include_cooperation=True)
-        if events_df.empty:
-            return pd.DataFrame()
+        if event_agg is None:
+            event_agg = self._get_event_agg(start_date, end_date)
 
-        event_agg = self.fe.aggregate_events(
-            events_df,
-            goldstein_metrics=["mean"],
-            mention_metrics=["sum"],
-            include_cooperation=True,
-        )
+        if event_agg.empty:
+            return pd.DataFrame()
 
         merged = self.fe.merge_market_events(market_df, event_agg)
         return merged
@@ -90,13 +103,15 @@ class CorrelationAnalyzer:
         start_date: date,
         end_date: date,
         method: Literal["pearson", "spearman"] = "pearson",
+        event_agg: Optional[pd.DataFrame] = None,
     ) -> list[CorrelationResult]:
         """
         Compute correlation between each event metric and log_return.
 
         Returns one CorrelationResult per event metric.
+        Pass event_agg to avoid refetching events for each symbol.
         """
-        merged = self._get_merged_data(symbol, start_date, end_date)
+        merged = self._get_merged_data(symbol, start_date, end_date, event_agg)
         if merged.empty or len(merged) < 10:
             return []
 
@@ -191,13 +206,16 @@ class CorrelationAnalyzer:
         Find strongest correlations across all symbol-event metric pairs.
 
         Returns a DataFrame sorted by absolute correlation strength.
+        Fetches events once and reuses across all symbols.
         """
+        # Fetch events once, reuse for every symbol
+        event_agg = self._get_event_agg(start_date, end_date)
         rows = []
 
         for symbol in symbols:
             try:
                 results = self.compute_correlations(
-                    symbol, start_date, end_date, method
+                    symbol, start_date, end_date, method, event_agg=event_agg
                 )
                 for r in results:
                     rows.append({
@@ -231,11 +249,13 @@ class CorrelationAnalyzer:
 
         Returns dict with symbols, event_types, and matrix suitable for heatmap.
         """
+        # Fetch events once, reuse for every symbol
+        event_agg = self._get_event_agg(start_date, end_date)
         matrix = []
 
         for symbol in symbols:
             results = self.compute_correlations(
-                symbol, start_date, end_date, method
+                symbol, start_date, end_date, method, event_agg=event_agg
             )
             row = {}
             for r in results:
