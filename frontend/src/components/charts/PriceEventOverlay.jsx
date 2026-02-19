@@ -1,3 +1,4 @@
+/** Combined line+scatter chart: price line with geopolitical event dot overlay. */
 import {
   ComposedChart, Line, Scatter, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,

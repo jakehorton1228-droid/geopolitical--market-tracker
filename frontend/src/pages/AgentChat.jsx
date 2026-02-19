@@ -1,3 +1,17 @@
+/**
+ * AI Agent Chat page — conversational interface to the Claude-powered analyst.
+ *
+ * Features:
+ * - Full chat UI with user/assistant message bubbles
+ * - Markdown rendering for agent responses (tables, lists, code blocks)
+ * - Tool call chips showing which analysis tools the agent used
+ * - Suggestion buttons for common questions
+ * - Animated thinking indicator while agent processes
+ * - Auto-scroll to latest message
+ *
+ * The agent uses Claude's tool use capability to call 10 internal
+ * analysis functions (events, correlations, patterns, predictions, anomalies).
+ */
 import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import { useAgentChat } from '../api/agent'

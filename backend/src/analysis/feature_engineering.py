@@ -1,9 +1,9 @@
 """
 Shared Feature Engineering Module.
 
-Centralizes the feature preparation logic that was previously
-duplicated across production_classifier.py, production_regression.py,
-production_anomaly.py, and gradient_boost_classifier.py.
+Centralizes the feature preparation logic used by all analysis modules:
+production_regression.py, production_anomaly.py, correlation.py,
+and historical_patterns.py.
 
 This module provides a single FeatureEngineering class that handles:
 1. Fetching market and event data from the database
@@ -30,7 +30,7 @@ USAGE:
     # For anomaly detection (full DataFrame with rolling stats)
     df = fe.prepare_anomaly_features("SPY", start, end, lookback_days=30)
 
-    # For gradient boosting (extended feature set)
+    # Extended features (more Goldstein metrics + mentions_max)
     X, y, names = fe.prepare_extended_features("SPY", start, end)
 """
 
@@ -262,7 +262,7 @@ class FeatureEngineering:
         """
         Prepare features for binary classification (UP/DOWN).
 
-        Used by: ProductionClassifier
+        Used by: LogisticRegressionAnalyzer (production_regression.py)
 
         Features: goldstein_mean, goldstein_min, goldstein_max,
                  mentions_total, avg_tone, conflict_count, cooperation_count
@@ -350,7 +350,7 @@ class FeatureEngineering:
         """
         Prepare extended features for gradient boosting.
 
-        Used by: GradientBoostClassifier
+        Extended feature set for models that can handle more dimensions.
 
         Features: goldstein_mean, goldstein_min, goldstein_max, goldstein_std,
                  mentions_total, mentions_max, avg_tone,

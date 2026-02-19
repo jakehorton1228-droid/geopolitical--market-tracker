@@ -1,3 +1,9 @@
+/**
+ * Prediction API hooks — React Query wrappers for logistic regression endpoints.
+ *
+ * - usePredictLogistic()                  — Mutation: run a live prediction
+ * - useModelSummary(symbol, start, end)   — Model fit statistics (accuracy, coefficients)
+ */
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from './client'
 

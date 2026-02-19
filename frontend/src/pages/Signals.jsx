@@ -1,3 +1,16 @@
+/**
+ * Signals page — market direction predictions with methodology transparency.
+ *
+ * Two levels of prediction:
+ * - Level 1 (Historical Frequency): Conditional probability counting.
+ *   "When violent conflict events occur, oil went UP 72% of the time."
+ * - Level 2 (Logistic Regression): 7-feature model with cross-validation.
+ *   "Based on today's event profile, probability of UP: 64%."
+ *
+ * Includes collapsible methodology panel explaining how each model works,
+ * data coverage banner (date range, training samples), and model summary
+ * with accuracy color-coding.
+ */
 import { useState } from 'react'
 import SymbolSelector from '../components/shared/SymbolSelector'
 import PatternCard from '../components/cards/PatternCard'
@@ -6,8 +19,6 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useAllPatterns } from '../api/patterns'
 import { useModelSummary } from '../api/predictions'
 import { usePredictLogistic } from '../api/predictions'
-import { DEFAULT_SYMBOLS } from '../lib/constants'
-
 const DATA_START = '2016-01-01'
 
 function todayStr() {

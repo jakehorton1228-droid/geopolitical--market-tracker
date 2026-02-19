@@ -1,3 +1,11 @@
+/**
+ * Correlation API hooks — React Query wrappers for event-market correlation endpoints.
+ *
+ * - useCorrelations(symbol, start, end)       — Per-metric correlations for one symbol
+ * - useRollingCorrelation(symbol, metric, ...) — Rolling window timeseries
+ * - useTopCorrelations(start, end, limit)     — Strongest pairs across all symbols
+ * - useCorrelationHeatmap(symbols, ...)       — Symbols x metrics matrix
+ */
 import { useQuery } from '@tanstack/react-query'
 import api from './client'
 

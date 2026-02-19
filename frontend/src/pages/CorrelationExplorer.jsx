@@ -1,3 +1,12 @@
+/**
+ * Correlation Explorer page — interactive analysis of event-market correlations.
+ *
+ * Features:
+ * - Per-symbol correlation table (goldstein, mentions, tone, conflict, cooperation vs returns)
+ * - Rolling correlation timeseries chart with confidence intervals
+ * - Correlation heatmap across multiple symbols
+ * - Symbol and date range selectors
+ */
 import { useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,

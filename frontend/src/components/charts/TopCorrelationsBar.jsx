@@ -1,3 +1,4 @@
+/** Horizontal bar chart showing strongest event-market correlation pairs. */
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell,

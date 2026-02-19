@@ -1,3 +1,11 @@
+/**
+ * Market Data API hooks — React Query wrappers for financial market endpoints.
+ *
+ * - useSymbols()                         — All 33 tracked symbols with metadata
+ * - useMarketData(symbol, start, end)    — OHLCV price data for a symbol
+ * - useMarketWithEvents(symbol, ...)     — Price data merged with event overlays
+ * - useLatestPrice(symbol)               — Most recent price for a symbol
+ */
 import { useQuery } from '@tanstack/react-query'
 import api from './client'
 

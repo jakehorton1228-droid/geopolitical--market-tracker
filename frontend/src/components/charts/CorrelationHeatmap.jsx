@@ -1,3 +1,4 @@
+/** Color-coded heatmap grid: symbols (rows) x event metrics (columns) with correlation values. */
 import { correlationColor, formatCorrelation } from '../../lib/formatters'
 
 export default function CorrelationHeatmap({ data }) {

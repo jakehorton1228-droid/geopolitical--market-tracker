@@ -1,3 +1,4 @@
+/** Compact metric card with label, large value, and optional subtext. Used on Dashboard. */
 export default function MetricCard({ label, value, subtext, color }) {
   return (
     <div className="bg-bg-secondary border border-border rounded-xl p-4">

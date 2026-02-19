@@ -1,3 +1,12 @@
+/**
+ * World Map page — choropleth visualization of geopolitical event intensity.
+ *
+ * Shows a zoomable world map where countries are colored by event count.
+ * Clicking a country shows drill-down details: event breakdown by type,
+ * average Goldstein score, and total media mentions.
+ *
+ * Uses react-simple-maps for the map rendering and Natural Earth TopoJSON.
+ */
 import { useState, useMemo } from 'react'
 import {
   ComposableMap, Geographies, Geography, ZoomableGroup,

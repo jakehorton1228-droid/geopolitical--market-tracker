@@ -1,3 +1,4 @@
+/** Date range picker with preset buttons (30D, 90D, 180D, 1Y, 5Y, 10Y) and manual inputs. */
 const PRESETS = [
   { label: '30D', days: 30 },
   { label: '90D', days: 90 },

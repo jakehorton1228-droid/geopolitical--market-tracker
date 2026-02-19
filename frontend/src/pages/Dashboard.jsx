@@ -1,3 +1,11 @@
+/**
+ * Dashboard page — overview of the geopolitical market tracker.
+ *
+ * Displays:
+ * - Metric cards: total events (since 2016), tracked symbols, strongest correlation, data sources
+ * - Top correlations bar chart (from precomputed cache)
+ * - Recent high-impact events table (sorted by mentions)
+ */
 import { useState } from 'react'
 import MetricCard from '../components/cards/MetricCard'
 import TopCorrelationsBar from '../components/charts/TopCorrelationsBar'

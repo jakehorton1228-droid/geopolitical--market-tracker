@@ -92,14 +92,13 @@ def setup_logging(
     if modules is None:
         modules = [
             "src.analysis",
-            "src.analysis.event_study",
-            "src.analysis.anomaly_detection",
-            "src.analysis.regression",
-            "src.analysis.classification",
-            "src.analysis.production_classifier",
+            "src.analysis.correlation",
+            "src.analysis.feature_engineering",
+            "src.analysis.historical_patterns",
             "src.analysis.production_regression",
             "src.analysis.production_event_study",
             "src.analysis.production_anomaly",
+            "src.agent",
             "src.ingestion",
             "src.ingestion.gdelt",
             "src.ingestion.market_data",

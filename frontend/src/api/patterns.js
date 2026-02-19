@@ -1,3 +1,9 @@
+/**
+ * Historical Patterns API hooks — React Query wrappers for frequency analysis.
+ *
+ * - usePattern(symbol, params)            — Single event group pattern
+ * - useAllPatterns(symbol, start, end)    — All event group + country patterns
+ */
 import { useQuery } from '@tanstack/react-query'
 import api from './client'
 

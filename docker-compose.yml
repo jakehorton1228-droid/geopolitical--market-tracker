@@ -50,6 +50,7 @@ services:
     container_name: gmt-api
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PYTHONPATH: /app
     ports:
       - "8000:8000"

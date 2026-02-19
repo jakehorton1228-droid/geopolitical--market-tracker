@@ -1,9 +1,18 @@
+/**
+ * AI Agent API hook — manages conversation state with the Claude-powered analyst.
+ *
+ * - useAgentChat() — Full chat state management:
+ *   - messages[]   — Conversation history (user + assistant messages)
+ *   - sendMessage() — POST to /api/agent/chat with message + history
+ *   - isLoading    — True while agent is processing (tool calls + response)
+ *   - error        — Last error message
+ *   - clearHistory() — Reset conversation
+ *
+ * The agent may take 5-30 seconds to respond as it executes multiple tool
+ * calls (querying events, running correlations, etc.) before synthesizing.
+ */
 import { useState, useCallback, useRef } from 'react'
 import api from './client'
-
-/**
- * Custom hook for managing agent chat state and API calls.
- */
 export function useAgentChat() {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)

@@ -1,3 +1,14 @@
+/**
+ * Event Timeline page — price charts overlaid with geopolitical event markers.
+ *
+ * Shows a combined line + scatter chart where:
+ * - Line: daily closing price for the selected symbol
+ * - Dots: geopolitical events colored by type (red=conflict, green=cooperation)
+ * - Hover: event details (actor, location, Goldstein score, mentions)
+ *
+ * Events are filtered to countries relevant to the selected symbol
+ * using the SYMBOL_COUNTRY_MAP from the backend.
+ */
 import { useState } from 'react'
 import SymbolSelector from '../components/shared/SymbolSelector'
 import DateRangePicker from '../components/shared/DateRangePicker'

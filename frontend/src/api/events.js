@@ -1,3 +1,11 @@
+/**
+ * Event API hooks — React Query wrappers for GDELT event endpoints.
+ *
+ * - useEvents(params)              — List events with filters (date, country, type)
+ * - useEventCount(start, end)      — Total event count for a date range
+ * - useEventsByCountry(start, end) — Event counts grouped by country
+ * - useEventsMap(params)           — Events aggregated by country for map view
+ */
 import { useQuery } from '@tanstack/react-query'
 import api from './client'
 

@@ -1,3 +1,4 @@
+/** Dropdown selector for tracked financial symbols, grouped by category. */
 import { useSymbols } from '../../api/market'
 import { DEFAULT_SYMBOLS } from '../../lib/constants'
 
