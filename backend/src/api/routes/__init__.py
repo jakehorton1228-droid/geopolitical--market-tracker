@@ -6,6 +6,7 @@ from src.api.routes.analysis import router as analysis_router
 from src.api.routes.correlation import router as correlation_router
 from src.api.routes.patterns import router as patterns_router
 from src.api.routes.predictions import router as predictions_router
+from src.api.routes.agent import router as agent_router
 
 __all__ = [
     "events_router",
@@ -14,4 +15,5 @@ __all__ = [
     "correlation_router",
     "patterns_router",
     "predictions_router",
+    "agent_router",
 ]

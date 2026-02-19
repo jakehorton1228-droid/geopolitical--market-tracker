@@ -24,6 +24,9 @@ statsmodels>=0.14.0
 # Orchestration
 prefect>=3.0.0
 
+# AI Agent
+anthropic>=0.40.0
+
 # Utilities
 python-dotenv>=1.0.0
 

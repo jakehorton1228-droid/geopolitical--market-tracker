@@ -34,3 +34,49 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
+
+/* Agent markdown prose styling */
+.prose-agent p { margin: 0.5em 0; }
+.prose-agent ul, .prose-agent ol { margin: 0.5em 0; padding-left: 1.5em; }
+.prose-agent li { margin: 0.2em 0; }
+.prose-agent strong { color: var(--color-text-primary); font-weight: 600; }
+.prose-agent code {
+  background: var(--color-bg-tertiary);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.prose-agent pre {
+  background: var(--color-bg-tertiary);
+  padding: 0.75em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.prose-agent pre code { background: none; padding: 0; }
+.prose-agent table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+.prose-agent th, .prose-agent td {
+  border: 1px solid var(--color-border);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.prose-agent th { background: var(--color-bg-tertiary); font-weight: 600; }
+.prose-agent h1, .prose-agent h2, .prose-agent h3 {
+  font-weight: 600;
+  margin: 0.75em 0 0.25em;
+}
+.prose-agent h1 { font-size: 1.2em; }
+.prose-agent h2 { font-size: 1.1em; }
+.prose-agent h3 { font-size: 1em; }
+.prose-agent blockquote {
+  border-left: 3px solid var(--color-accent-blue);
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: var(--color-text-secondary);
+}
+.prose-agent hr { border-color: var(--color-border); margin: 0.75em 0; }

@@ -27,6 +27,11 @@ FRED_API_KEY = os.getenv("FRED_API_KEY")
 GDELT_EVENTS_URL = "http://data.gdeltproject.org/events"
 GDELT_MIN_MENTIONS = 200  # Minimum mentions to consider an event significant
 
+# AI Agent
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+AGENT_MODEL = "claude-sonnet-4-20250514"
+AGENT_MAX_TOKENS = 4096
+
 # Analysis settings
 EVENT_STUDY_ESTIMATION_WINDOW = 30  # Days for baseline calculation
 EVENT_STUDY_EVENT_WINDOW_BEFORE = 1  # Days before event

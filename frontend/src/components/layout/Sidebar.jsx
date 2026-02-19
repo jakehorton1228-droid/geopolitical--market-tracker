@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/timeline', label: 'Timeline', icon: '⊟' },
   { to: '/map', label: 'World Map', icon: '⊕' },
   { to: '/signals', label: 'Signals', icon: '⊗' },
+  { to: '/agent', label: 'AI Agent', icon: '◈' },
 ]
 
 export default function Sidebar() {
