@@ -25,7 +25,7 @@ FRED_API_KEY = os.getenv("FRED_API_KEY")
 
 # GDELT settings
 GDELT_EVENTS_URL = "http://data.gdeltproject.org/events"
-GDELT_MIN_MENTIONS = 5  # Minimum mentions to consider an event significant
+GDELT_MIN_MENTIONS = 200  # Minimum mentions to consider an event significant
 
 # Analysis settings
 EVENT_STUDY_ESTIMATION_WINDOW = 30  # Days for baseline calculation
