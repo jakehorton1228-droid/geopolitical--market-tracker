@@ -55,7 +55,7 @@ def list_events(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     query = db.query(Event).filter(
         Event.event_date >= start_date,
@@ -107,7 +107,7 @@ def count_events(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     count = db.query(func.count(Event.id)).filter(
         Event.event_date >= start_date,
@@ -128,7 +128,7 @@ def events_by_country(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     results = db.query(
         Event.action_geo_country_code,
@@ -157,7 +157,7 @@ def events_by_type(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     results = db.query(
         Event.event_root_code,
@@ -199,7 +199,7 @@ def events_for_map(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     query = db.query(Event).filter(
         Event.event_date >= start_date,

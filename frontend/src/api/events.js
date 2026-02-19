@@ -8,6 +8,7 @@ export function useEvents(params = {}) {
       const { data } = await api.get('/events', { params })
       return data
     },
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -20,6 +21,7 @@ export function useEventCount(start_date, end_date) {
       })
       return data
     },
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -32,6 +34,7 @@ export function useEventsByCountry(start_date, end_date) {
       })
       return data
     },
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -42,5 +45,6 @@ export function useEventsMap(params = {}) {
       const { data } = await api.get('/events/map', { params })
       return data
     },
+    staleTime: 5 * 60 * 1000,
   })
 }

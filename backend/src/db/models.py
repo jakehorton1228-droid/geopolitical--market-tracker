@@ -229,3 +229,29 @@ class AnalysisResult(Base):
 
     def __repr__(self):
         return f"<AnalysisResult {self.symbol} event={self.event_id}: CAR={self.car:.4f}>"
+
+
+class CorrelationCache(Base):
+    """
+    Pre-computed correlation results for fast dashboard loading.
+
+    Populated by the daily Prefect pipeline. The API reads from this
+    table instead of computing correlations on every request.
+    One row per (symbol, event_metric, method) combination.
+    """
+    __tablename__ = "correlation_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    event_metric = Column(String(30), nullable=False)
+    correlation = Column(Float, nullable=False)
+    p_value = Column(Float, nullable=False)
+    n_observations = Column(Integer, nullable=False)
+    method = Column(String(10), nullable=False, default="pearson")
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    computed_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("symbol", "event_metric", "method", name="uq_correlation_cache"),
+    )

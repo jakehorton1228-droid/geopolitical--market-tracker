@@ -38,6 +38,7 @@ export function useTopCorrelations(start_date, end_date, limit = 20, symbols) {
       })
       return data
     },
+    staleTime: 30 * 60 * 1000,
   })
 }
 

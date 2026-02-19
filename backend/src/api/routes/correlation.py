@@ -31,14 +31,27 @@ def get_top_correlations(
     """
     Find the strongest correlations across all symbol-event metric pairs.
 
-    Powers the dashboard home "Top Correlated Pairs" widget.
+    Uses pre-computed cache when available (populated by daily Prefect pipeline).
+    Falls back to live computation if cache is empty or specific symbols are requested.
     """
-    from src.analysis.correlation import CorrelationAnalyzer
-
     if end_date is None:
         end_date = date.today()
     if start_date is None:
         start_date = end_date - timedelta(days=365)
+
+    # Try cache first (only for default all-symbols requests)
+    if not symbols:
+        from src.db.connection import get_session
+        from src.db.queries import get_cached_correlations
+
+        with get_session() as session:
+            cached = get_cached_correlations(session, method=method, limit=limit)
+            if cached:
+                logger.info(f"Returning {len(cached)} cached correlation results")
+                return cached
+
+    # Cache miss or specific symbols requested — compute live
+    from src.analysis.correlation import CorrelationAnalyzer
 
     if symbols:
         symbol_list = [s.strip() for s in symbols.split(",")]

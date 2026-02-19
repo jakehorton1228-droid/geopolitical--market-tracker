@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import MetricCard from '../components/cards/MetricCard'
 import TopCorrelationsBar from '../components/charts/TopCorrelationsBar'
-import LoadingSpinner from '../components/shared/LoadingSpinner'
+import SkeletonCard from '../components/shared/SkeletonCard'
+import SkeletonChart from '../components/shared/SkeletonChart'
 import { useEventCount, useEvents } from '../api/events'
 import { useSymbols } from '../api/market'
 import { useTopCorrelations } from '../api/correlation'
@@ -13,10 +14,10 @@ function daysAgo(n) {
 }
 
 export default function Dashboard() {
-  const [range] = useState({ start: daysAgo(30), end: daysAgo(0) })
+  const [range] = useState({ start: daysAgo(365), end: daysAgo(0) })
 
-  const { data: eventCount } = useEventCount(range.start, range.end)
-  const { data: symbols } = useSymbols()
+  const { data: eventCount, isLoading: countLoading } = useEventCount(range.start, range.end)
+  const { data: symbols, isLoading: symbolsLoading } = useSymbols()
   const { data: topCorr, isLoading: corrLoading } = useTopCorrelations(
     range.start, range.end, 10,
   )
@@ -40,22 +41,28 @@ export default function Dashboard() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Events (30d)"
-          value={eventCount?.count?.toLocaleString() ?? '...'}
-          subtext="GDELT geopolitical events"
-        />
-        <MetricCard
-          label="Symbols Tracked"
-          value={symbols?.length ?? '...'}
-          subtext="Commodities, currencies, ETFs"
-        />
-        <MetricCard
-          label="Strongest Correlation"
-          value={strongestCorr ? strongestCorr.correlation.toFixed(3) : '...'}
-          subtext={strongestCorr ? `${strongestCorr.symbol} x ${strongestCorr.event_metric.replace(/_/g, ' ')}` : ''}
-          color={strongestCorr?.correlation > 0 ? '#10b981' : '#ef4444'}
-        />
+        {countLoading ? <SkeletonCard /> : (
+          <MetricCard
+            label="Events (1yr)"
+            value={eventCount?.count?.toLocaleString() ?? '0'}
+            subtext="GDELT geopolitical events"
+          />
+        )}
+        {symbolsLoading ? <SkeletonCard /> : (
+          <MetricCard
+            label="Symbols Tracked"
+            value={symbols?.length ?? '0'}
+            subtext="Commodities, currencies, ETFs"
+          />
+        )}
+        {corrLoading ? <SkeletonCard /> : (
+          <MetricCard
+            label="Strongest Correlation"
+            value={strongestCorr ? strongestCorr.correlation.toFixed(3) : '—'}
+            subtext={strongestCorr ? `${strongestCorr.symbol} x ${strongestCorr.event_metric.replace(/_/g, ' ')}` : ''}
+            color={strongestCorr?.correlation > 0 ? '#10b981' : '#ef4444'}
+          />
+        )}
         <MetricCard
           label="Data Sources"
           value="2"
@@ -65,7 +72,7 @@ export default function Dashboard() {
 
       {/* Top Correlations */}
       {corrLoading ? (
-        <LoadingSpinner message="Computing correlations..." />
+        <SkeletonChart height="h-72" message="Computing correlations across 33 symbols..." />
       ) : topCorr && topCorr.length > 0 ? (
         <TopCorrelationsBar data={topCorr} />
       ) : (
@@ -80,7 +87,16 @@ export default function Dashboard() {
           Recent High-Impact Events
         </h3>
         {eventsLoading ? (
-          <LoadingSpinner message="Loading events..." />
+          <div className="space-y-2 animate-pulse">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="h-4 w-20 bg-bg-tertiary rounded" />
+                <div className="h-4 w-32 bg-bg-tertiary rounded" />
+                <div className="h-4 flex-1 bg-bg-tertiary rounded" />
+                <div className="h-4 w-12 bg-bg-tertiary rounded" />
+              </div>
+            ))}
+          </div>
         ) : recentEvents && recentEvents.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

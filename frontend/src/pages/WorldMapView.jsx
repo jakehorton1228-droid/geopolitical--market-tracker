@@ -24,7 +24,7 @@ function eventIntensityColor(count) {
 }
 
 export default function WorldMapView() {
-  const [startDate, setStartDate] = useState(daysAgo(30))
+  const [startDate, setStartDate] = useState(daysAgo(365))
   const [endDate, setEndDate] = useState(daysAgo(0))
   const [selected, setSelected] = useState(null)
 

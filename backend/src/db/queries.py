@@ -404,3 +404,78 @@ def get_average_market_reaction(
             "significance_rate": float(results.significance_rate) if results.significance_rate else 0,
         }
     return None
+
+
+# =============================================================================
+# CORRELATION CACHE
+# =============================================================================
+
+
+def save_correlation_cache(
+    session: Session,
+    results: list[dict],
+    method: str = "pearson",
+) -> int:
+    """
+    Replace cached correlations with fresh results.
+
+    Deletes all existing rows for the given method and bulk inserts new ones.
+    Returns the number of rows inserted.
+    """
+    from src.db.models import CorrelationCache
+
+    # Clear existing cache for this method
+    session.query(CorrelationCache).filter(
+        CorrelationCache.method == method,
+    ).delete()
+
+    # Insert new rows
+    for r in results:
+        session.add(CorrelationCache(
+            symbol=r["symbol"],
+            event_metric=r["event_metric"],
+            correlation=r["correlation"],
+            p_value=r["p_value"],
+            n_observations=r["n_observations"],
+            method=method,
+            start_date=r["start_date"],
+            end_date=r["end_date"],
+        ))
+
+    session.flush()
+    return len(results)
+
+
+def get_cached_correlations(
+    session: Session,
+    method: str = "pearson",
+    limit: int = 20,
+) -> list[dict]:
+    """
+    Get top cached correlations sorted by absolute correlation strength.
+
+    Returns list of dicts matching the /api/correlation/top response shape.
+    Returns empty list if cache is empty.
+    """
+    from src.db.models import CorrelationCache
+
+    rows = session.query(CorrelationCache).filter(
+        CorrelationCache.method == method,
+    ).order_by(
+        func.abs(CorrelationCache.correlation).desc(),
+    ).limit(limit).all()
+
+    return [
+        {
+            "symbol": r.symbol,
+            "event_metric": r.event_metric,
+            "correlation": r.correlation,
+            "abs_correlation": abs(r.correlation),
+            "p_value": r.p_value,
+            "n_observations": r.n_observations,
+            "direction": "positive" if r.correlation > 0 else "negative",
+            "cached": True,
+            "computed_at": r.computed_at.isoformat() if r.computed_at else None,
+        }
+        for r in rows
+    ]

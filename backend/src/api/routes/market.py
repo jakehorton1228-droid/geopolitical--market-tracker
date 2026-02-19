@@ -51,7 +51,7 @@ def list_market_data(
     if not end_date:
         end_date = date.today()
     if not start_date:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
 
     query = db.query(MarketData).filter(
         MarketData.date >= start_date,
