@@ -13,6 +13,7 @@ import logging
 import numpy as np
 import pandas as pd
 from scipy import stats
+from sqlalchemy import select
 
 from src.analysis.feature_engineering import FeatureEngineering
 from src.config.constants import (
@@ -21,6 +22,7 @@ from src.config.constants import (
     CAMEO_CATEGORIES,
 )
 from src.db.connection import get_session
+from src.db.models import Event
 from src.db.queries import get_events_by_date_range
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,87 @@ class HistoricalPatternAnalyzer:
 
     def __init__(self):
         self.fe = FeatureEngineering()
+
+    def _fetch_event_date_counts(
+        self,
+        start_date: date,
+        end_date: date,
+        event_root_codes: Optional[list[str]] = None,
+        country_code: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """
+        Get event counts per date using SQL aggregation.
+
+        Much faster than loading millions of rows — the database does
+        the filtering and grouping, returning only ~3600 rows (one per date).
+        """
+        from sqlalchemy import func, or_
+
+        with get_session() as session:
+            query = session.query(
+                Event.event_date.label("date"),
+                func.count(Event.id).label("event_count"),
+            ).filter(
+                Event.event_date >= start_date,
+                Event.event_date <= end_date,
+            )
+
+            if event_root_codes:
+                query = query.filter(Event.event_root_code.in_(event_root_codes))
+
+            if country_code:
+                query = query.filter(or_(
+                    Event.actor1_country_code == country_code,
+                    Event.actor2_country_code == country_code,
+                    Event.action_geo_country_code == country_code,
+                ))
+
+            query = query.group_by(Event.event_date)
+            rows = query.all()
+
+        if not rows:
+            return pd.DataFrame()
+
+        return pd.DataFrame(rows, columns=["date", "event_count"])
+
+    def _compute_pattern_from_dates(
+        self,
+        market_df: pd.DataFrame,
+        event_dates_df: pd.DataFrame,
+        symbol: str,
+        event_filter: str,
+    ) -> Optional[HistoricalPattern]:
+        """Compute a single pattern by joining event dates with market returns."""
+        if event_dates_df.empty:
+            return None
+
+        # Merge with market data — only keep dates where events occurred
+        merged = pd.merge(market_df, event_dates_df[["date"]], on="date", how="inner")
+        merged = merged.dropna(subset=["log_return"])
+
+        if merged.empty or len(merged) < 5:
+            return None
+
+        returns = merged["log_return"].values
+        up_returns = returns[returns > 0]
+        down_returns = returns[returns <= 0]
+
+        t_stat, p_value = stats.ttest_1samp(returns, 0)
+
+        return HistoricalPattern(
+            symbol=symbol,
+            event_filter=event_filter,
+            total_occurrences=len(returns),
+            up_count=len(up_returns),
+            down_count=len(down_returns),
+            up_percentage=len(up_returns) / len(returns) * 100,
+            avg_return_up=float(np.mean(up_returns) * 100) if len(up_returns) > 0 else 0.0,
+            avg_return_down=float(np.mean(down_returns) * 100) if len(down_returns) > 0 else 0.0,
+            avg_return_all=float(np.mean(returns) * 100),
+            median_return=float(np.median(returns) * 100),
+            t_statistic=float(t_stat),
+            p_value=float(p_value),
+        )
 
     def _get_event_day_returns(
         self,
@@ -175,15 +258,25 @@ class HistoricalPatternAnalyzer:
         """
         Compute patterns for all event groups for a symbol.
 
-        Also checks country-specific patterns based on SYMBOL_COUNTRY_MAP.
+        Uses SQL-level aggregation (GROUP BY event_date) for each filter
+        combination instead of loading millions of event rows into Python.
+        Each query returns only ~3600 rows (one per date with events).
         """
+        # Fetch market data once
+        market_df = self.fe.fetch_market_data(symbol, start_date, end_date)
+        if market_df.empty:
+            return []
+
         patterns = []
 
-        # Pattern for each event group
-        for group_name in EVENT_GROUPS:
-            pattern = self.analyze_event_type_pattern(
-                symbol, start_date, end_date,
-                event_group=group_name,
+        # Pattern for each event group (SQL aggregation per group)
+        for group_name, codes in EVENT_GROUPS.items():
+            event_dates = self._fetch_event_date_counts(
+                start_date, end_date, event_root_codes=codes,
+            )
+            filter_label = group_name.replace("_", " ")
+            pattern = self._compute_pattern_from_dates(
+                market_df, event_dates, symbol, filter_label,
             )
             if pattern and pattern.total_occurrences >= min_occurrences:
                 patterns.append(pattern)
@@ -191,19 +284,27 @@ class HistoricalPatternAnalyzer:
         # Country-specific patterns
         relevant_countries = SYMBOL_COUNTRY_MAP.get(symbol, [])
         for country in relevant_countries:
-            pattern = self.analyze_event_type_pattern(
-                symbol, start_date, end_date,
-                country_code=country,
+            # All events for country
+            event_dates = self._fetch_event_date_counts(
+                start_date, end_date, country_code=country,
+            )
+            pattern = self._compute_pattern_from_dates(
+                market_df, event_dates, symbol, f"in {country}",
             )
             if pattern and pattern.total_occurrences >= min_occurrences:
                 patterns.append(pattern)
 
             # Country + conflict combo
             for group_name in ["violent_conflict", "material_conflict"]:
-                pattern = self.analyze_event_type_pattern(
-                    symbol, start_date, end_date,
-                    event_group=group_name,
+                codes = EVENT_GROUPS[group_name]
+                event_dates = self._fetch_event_date_counts(
+                    start_date, end_date,
+                    event_root_codes=codes,
                     country_code=country,
+                )
+                filter_label = f"{group_name.replace('_', ' ')} in {country}"
+                pattern = self._compute_pattern_from_dates(
+                    market_df, event_dates, symbol, filter_label,
                 )
                 if pattern and pattern.total_occurrences >= min_occurrences:
                     patterns.append(pattern)

@@ -40,8 +40,10 @@ import logging
 
 import numpy as np
 import pandas as pd
+from sqlalchemy import select, func, case, and_
 
 from src.db.connection import get_session
+from src.db.models import Event
 from src.db.queries import get_market_data, get_events_by_date_range
 
 logger = logging.getLogger(__name__)
@@ -109,32 +111,48 @@ class FeatureEngineering:
         """
         Fetch events and parse CAMEO codes into categories.
 
+        Uses a lightweight column-only query instead of loading full ORM objects
+        for performance with large event tables (millions of rows).
+
         Returns:
             DataFrame with date, goldstein_scale, num_mentions,
             avg_tone, is_conflict, and optionally is_cooperation
         """
         with get_session() as session:
-            events = get_events_by_date_range(session, start_date, end_date)
+            rows = session.execute(
+                select(
+                    Event.event_date,
+                    Event.goldstein_scale,
+                    Event.num_mentions,
+                    Event.avg_tone,
+                    Event.event_root_code,
+                ).where(
+                    Event.event_date >= start_date,
+                    Event.event_date <= end_date,
+                )
+            ).all()
 
-            if not events:
-                return pd.DataFrame()
+        if not rows:
+            return pd.DataFrame()
 
-            rows = []
-            for e in events:
-                row = {
-                    "date": e.event_date,
-                    "goldstein_scale": e.goldstein_scale or 0,
-                    "num_mentions": e.num_mentions or 0,
-                    "avg_tone": e.avg_tone or 0,
-                    "is_conflict": 1 if e.event_root_code in CONFLICT_CODES else 0,
-                }
-                if include_cooperation:
-                    row["is_cooperation"] = (
-                        1 if e.event_root_code in COOPERATION_CODES else 0
-                    )
-                rows.append(row)
+        df = pd.DataFrame(rows, columns=[
+            "date", "goldstein_scale", "num_mentions", "avg_tone", "event_root_code",
+        ])
 
-            return pd.DataFrame(rows)
+        # Fill nulls
+        df["goldstein_scale"] = df["goldstein_scale"].fillna(0)
+        df["num_mentions"] = df["num_mentions"].fillna(0)
+        df["avg_tone"] = df["avg_tone"].fillna(0)
+
+        # Parse CAMEO codes into categories
+        df["is_conflict"] = df["event_root_code"].isin(CONFLICT_CODES).astype(int)
+        if include_cooperation:
+            df["is_cooperation"] = df["event_root_code"].isin(COOPERATION_CODES).astype(int)
+
+        # Drop the raw code column (not needed downstream)
+        df = df.drop(columns=["event_root_code"])
+
+        return df
 
     def aggregate_events(
         self,
@@ -252,6 +270,73 @@ class FeatureEngineering:
 
         return df
 
+    def fetch_events_aggregated_sql(
+        self,
+        start_date: date,
+        end_date: date,
+        goldstein_metrics: list[str] = None,
+        include_cooperation: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Aggregate events by date directly in SQL.
+
+        Returns ~3600 rows (one per date) instead of loading millions of
+        individual event rows. Much faster for large datasets.
+        """
+        if goldstein_metrics is None:
+            goldstein_metrics = ["mean", "min", "max"]
+
+        # Build SQL aggregation columns
+        agg_columns = [Event.event_date.label("date")]
+        col_names = ["date"]
+
+        for metric in goldstein_metrics:
+            if metric == "mean":
+                agg_columns.append(func.avg(Event.goldstein_scale).label("goldstein_mean"))
+                col_names.append("goldstein_mean")
+            elif metric == "min":
+                agg_columns.append(func.min(Event.goldstein_scale).label("goldstein_min"))
+                col_names.append("goldstein_min")
+            elif metric == "max":
+                agg_columns.append(func.max(Event.goldstein_scale).label("goldstein_max"))
+                col_names.append("goldstein_max")
+            elif metric == "std":
+                agg_columns.append(func.stddev(Event.goldstein_scale).label("goldstein_std"))
+                col_names.append("goldstein_std")
+
+        agg_columns.append(func.sum(Event.num_mentions).label("mentions_total"))
+        col_names.append("mentions_total")
+
+        agg_columns.append(func.avg(Event.avg_tone).label("avg_tone"))
+        col_names.append("avg_tone")
+
+        # Conflict count: CAMEO codes 18, 19, 20
+        agg_columns.append(func.sum(
+            case((Event.event_root_code.in_(list(CONFLICT_CODES)), 1), else_=0)
+        ).label("conflict_count"))
+        col_names.append("conflict_count")
+
+        if include_cooperation:
+            agg_columns.append(func.sum(
+                case((Event.event_root_code.in_(list(COOPERATION_CODES)), 1), else_=0)
+            ).label("cooperation_count"))
+            col_names.append("cooperation_count")
+
+        with get_session() as session:
+            rows = session.execute(
+                select(*agg_columns).where(
+                    Event.event_date >= start_date,
+                    Event.event_date <= end_date,
+                ).group_by(Event.event_date)
+            ).all()
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows, columns=col_names)
+        df = df.fillna(0)
+        return df
+
     def prepare_classification_features(
         self,
         symbol: str,
@@ -264,6 +349,8 @@ class FeatureEngineering:
 
         Used by: LogisticRegressionAnalyzer (production_regression.py)
 
+        Uses SQL-level aggregation to avoid loading millions of event rows.
+
         Features: goldstein_mean, goldstein_min, goldstein_max,
                  mentions_total, avg_tone, conflict_count, cooperation_count
         Target: 1 if log_return > 0, else 0
@@ -272,16 +359,13 @@ class FeatureEngineering:
         if market_df.empty:
             return np.array([]), np.array([]), []
 
-        events_df = self.fetch_events(start_date, end_date, include_cooperation=True)
-        if events_df.empty:
-            return np.array([]), np.array([]), []
-
-        event_agg = self.aggregate_events(
-            events_df,
+        event_agg = self.fetch_events_aggregated_sql(
+            start_date, end_date,
             goldstein_metrics=["mean", "min", "max"],
-            mention_metrics=["sum"],
             include_cooperation=True,
         )
+        if event_agg.empty:
+            return np.array([]), np.array([]), []
 
         merged = self.merge_market_events(market_df, event_agg)
 
@@ -310,6 +394,8 @@ class FeatureEngineering:
 
         Used by: ProductionRegression
 
+        Uses SQL-level aggregation to avoid loading millions of event rows.
+
         Features: goldstein_mean, mentions_total, avg_tone, conflict_count
         Target: log_return (continuous)
         """
@@ -317,16 +403,13 @@ class FeatureEngineering:
         if market_df.empty:
             return np.array([]), np.array([]), []
 
-        events_df = self.fetch_events(start_date, end_date, include_cooperation=False)
-        if events_df.empty:
-            return np.array([]), np.array([]), []
-
-        event_agg = self.aggregate_events(
-            events_df,
+        event_agg = self.fetch_events_aggregated_sql(
+            start_date, end_date,
             goldstein_metrics=["mean"],
-            mention_metrics=["sum"],
             include_cooperation=False,
         )
+        if event_agg.empty:
+            return np.array([]), np.array([]), []
 
         merged = self.merge_market_events(market_df, event_agg)
 
@@ -351,6 +434,7 @@ class FeatureEngineering:
         Prepare extended features for gradient boosting.
 
         Extended feature set for models that can handle more dimensions.
+        Uses SQL-level aggregation to avoid loading millions of event rows.
 
         Features: goldstein_mean, goldstein_min, goldstein_max, goldstein_std,
                  mentions_total, mentions_max, avg_tone,
@@ -362,17 +446,36 @@ class FeatureEngineering:
             logger.warning(f"No market data for {symbol}")
             return np.array([]), np.array([]), []
 
-        events_df = self.fetch_events(start_date, end_date, include_cooperation=True)
-        if events_df.empty:
+        # SQL aggregation with extended metrics
+        # mentions_max needs a separate query since fetch_events_aggregated_sql
+        # only does SUM for mentions. Add it via the original path for now.
+        event_agg = self.fetch_events_aggregated_sql(
+            start_date, end_date,
+            goldstein_metrics=["mean", "min", "max", "std"],
+            include_cooperation=True,
+        )
+        if event_agg.empty:
             logger.warning(f"No events found for date range")
             return np.array([]), np.array([]), []
 
-        event_agg = self.aggregate_events(
-            events_df,
-            goldstein_metrics=["mean", "min", "max", "std"],
-            mention_metrics=["sum", "max"],
-            include_cooperation=True,
-        )
+        # Add mentions_max via a separate lightweight SQL query
+        with get_session() as session:
+            max_rows = session.execute(
+                select(
+                    Event.event_date.label("date"),
+                    func.max(Event.num_mentions).label("mentions_max"),
+                ).where(
+                    Event.event_date >= start_date,
+                    Event.event_date <= end_date,
+                ).group_by(Event.event_date)
+            ).all()
+
+        if max_rows:
+            max_df = pd.DataFrame(max_rows, columns=["date", "mentions_max"])
+            event_agg = pd.merge(event_agg, max_df, on="date", how="left")
+            event_agg["mentions_max"] = event_agg["mentions_max"].fillna(0)
+        else:
+            event_agg["mentions_max"] = 0
 
         merged = self.merge_market_events(market_df, event_agg)
 
