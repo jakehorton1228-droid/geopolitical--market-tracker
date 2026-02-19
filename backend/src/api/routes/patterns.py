@@ -33,7 +33,7 @@ def get_pattern(
     if end_date is None:
         end_date = date.today()
     if start_date is None:
-        start_date = end_date - timedelta(days=365)
+        start_date = date(2016, 1, 1)
 
     analyzer = HistoricalPatternAnalyzer()
     pattern = analyzer.analyze_event_type_pattern(
@@ -84,7 +84,7 @@ def get_all_patterns(
     if end_date is None:
         end_date = date.today()
     if start_date is None:
-        start_date = end_date - timedelta(days=365)
+        start_date = date(2016, 1, 1)
 
     analyzer = HistoricalPatternAnalyzer()
     patterns = analyzer.all_patterns_for_symbol(

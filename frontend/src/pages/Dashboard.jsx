@@ -14,7 +14,7 @@ function daysAgo(n) {
 }
 
 export default function Dashboard() {
-  const [range] = useState({ start: daysAgo(365), end: daysAgo(0) })
+  const [range] = useState({ start: '2016-01-01', end: daysAgo(0) })
 
   const { data: eventCount, isLoading: countLoading } = useEventCount(range.start, range.end)
   const { data: symbols, isLoading: symbolsLoading } = useSymbols()
@@ -43,7 +43,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {countLoading ? <SkeletonCard /> : (
           <MetricCard
-            label="Events (1yr)"
+            label="Events (since 2016)"
             value={eventCount?.count?.toLocaleString() ?? '0'}
             subtext="GDELT geopolitical events"
           />
@@ -59,7 +59,7 @@ export default function Dashboard() {
           <MetricCard
             label="Strongest Correlation"
             value={strongestCorr ? strongestCorr.correlation.toFixed(3) : '—'}
-            subtext={strongestCorr ? `${strongestCorr.symbol} x ${strongestCorr.event_metric.replace(/_/g, ' ')}` : ''}
+            subtext={strongestCorr ? `${strongestCorr.symbol} x ${strongestCorr.event_metric.replace(/_/g, ' ')} (Pearson)` : ''}
             color={strongestCorr?.correlation > 0 ? '#10b981' : '#ef4444'}
           />
         )}

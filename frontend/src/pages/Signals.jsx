@@ -8,16 +8,23 @@ import { useModelSummary } from '../api/predictions'
 import { usePredictLogistic } from '../api/predictions'
 import { DEFAULT_SYMBOLS } from '../lib/constants'
 
-function daysAgo(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]
+const DATA_START = '2016-01-01'
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function accuracyColor(acc) {
+  if (acc >= 0.55) return 'text-accent-green'
+  if (acc >= 0.52) return 'text-yellow-400'
+  return 'text-accent-red'
 }
 
 export default function Signals() {
   const [symbol, setSymbol] = useState('CL=F')
-  const startDate = daysAgo(365)
-  const endDate = daysAgo(0)
+  const [showMethodology, setShowMethodology] = useState(false)
+  const startDate = DATA_START
+  const endDate = todayStr()
 
   const { data: patterns, isLoading: patternsLoading } = useAllPatterns(
     symbol, startDate, endDate, 10,
@@ -50,6 +57,46 @@ export default function Signals() {
         </p>
       </div>
 
+      {/* How This Works — collapsible methodology panel */}
+      <div className="bg-bg-secondary border border-border rounded-xl">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-text-secondary hover:text-text-primary transition-colors"
+        >
+          <span className="font-medium">How This Works</span>
+          <span className="text-xs">{showMethodology ? '▲ Hide' : '▼ Show'}</span>
+        </button>
+        {showMethodology && (
+          <div className="px-4 pb-4 space-y-3 text-xs text-text-secondary border-t border-border pt-3">
+            <div>
+              <p className="font-medium text-text-primary mb-1">Level 1 — Historical Frequency Patterns</p>
+              <p>
+                Counts how often the market moved UP or DOWN on days when specific event types
+                occurred. This is not a predictive model — it shows conditional probability from
+                historical data. A ~50% result means the event has no consistent directional bias.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-text-primary mb-1">Level 2 — Logistic Regression</p>
+              <p>
+                Trains a binary classification model (sklearn LogisticRegression) on 7 event-based
+                features to predict market direction. Evaluated with 5-fold cross-validation.
+                Features: Goldstein mean/min/max, total mentions, average tone, conflict count,
+                cooperation count.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-text-primary mb-1">What makes a pattern significant?</p>
+              <p>
+                A p-value &lt; 0.05 (marked with a blue badge) means the directional bias is
+                statistically unlikely to be random chance. A one-sample t-test checks if the
+                mean return on event days differs significantly from zero.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-4">
         <SymbolSelector value={symbol} onChange={setSymbol} />
 
@@ -60,6 +107,24 @@ export default function Signals() {
         >
           {predict.isPending ? 'Predicting...' : 'Run Prediction (Sample Data)'}
         </button>
+      </div>
+
+      {/* Data coverage banner */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary bg-bg-secondary border border-border rounded-lg px-4 py-2">
+        <span>
+          <span className="text-text-primary font-medium">Date Range:</span>{' '}
+          Jan 2016 — {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+        </span>
+        <span className="text-border">|</span>
+        <span>
+          <span className="text-text-primary font-medium">Training Samples:</span>{' '}
+          {modelSummary ? modelSummary.n_training_samples.toLocaleString() : '—'} trading days
+        </span>
+        <span className="text-border">|</span>
+        <span>
+          <span className="text-text-primary font-medium">Sources:</span>{' '}
+          GDELT events + Yahoo Finance
+        </span>
       </div>
 
       {/* Level 2: Logistic Regression Prediction */}
@@ -83,25 +148,36 @@ export default function Signals() {
         <LoadingSpinner message="Loading model summary..." />
       ) : modelSummary ? (
         <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
-            Model Summary — {symbol}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-text-primary">
+              Model Summary — {symbol}
+            </h3>
+            <span className="text-[10px] text-text-secondary">
+              Trained on {startDate} to {endDate}
+            </span>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             <div className="bg-bg-tertiary rounded-lg p-2">
               <p className="text-text-secondary">Accuracy</p>
-              <p className="text-lg font-bold">{(modelSummary.accuracy * 100).toFixed(1)}%</p>
+              <p className={`text-lg font-bold ${accuracyColor(modelSummary.accuracy)}`}>
+                {(modelSummary.accuracy * 100).toFixed(1)}%
+              </p>
+              <p className="text-[10px] text-text-secondary mt-0.5">Baseline (random): 50%</p>
             </div>
             <div className="bg-bg-tertiary rounded-lg p-2">
               <p className="text-text-secondary">Training Samples</p>
-              <p className="text-lg font-bold">{modelSummary.n_training_samples}</p>
+              <p className="text-lg font-bold">{modelSummary.n_training_samples.toLocaleString()}</p>
+              <p className="text-[10px] text-text-secondary mt-0.5">Days with events + market data</p>
             </div>
             <div className="bg-bg-tertiary rounded-lg p-2">
               <p className="text-text-secondary">UP Ratio</p>
               <p className="text-lg font-bold">{(modelSummary.up_ratio * 100).toFixed(0)}%</p>
+              <p className="text-[10px] text-text-secondary mt-0.5">% of days market went up</p>
             </div>
             <div className="bg-bg-tertiary rounded-lg p-2">
               <p className="text-text-secondary">Accuracy Std</p>
               <p className="text-lg font-bold">{(modelSummary.accuracy_std * 100).toFixed(1)}%</p>
+              <p className="text-[10px] text-text-secondary mt-0.5">Variation across 5 CV folds</p>
             </div>
           </div>
 
@@ -139,11 +215,15 @@ export default function Signals() {
           Level 1 — Historical Frequency Patterns
         </h3>
         {patternsLoading ? (
-          <LoadingSpinner message="Computing patterns..." />
+          <LoadingSpinner message="Computing patterns across 10 years of data..." />
         ) : patterns && patterns.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {patterns.map((p, i) => (
-              <PatternCard key={i} pattern={p} />
+              <PatternCard
+                key={i}
+                pattern={p}
+                totalTradingDays={modelSummary?.n_training_samples}
+              />
             ))}
           </div>
         ) : (

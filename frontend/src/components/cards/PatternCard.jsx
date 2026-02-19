@@ -1,12 +1,22 @@
 import { formatPercent } from '../../lib/formatters'
 
-export default function PatternCard({ pattern }) {
+function biasLabel(upPct) {
+  if (upPct >= 60) return { text: 'Bullish bias', cls: 'text-accent-green' }
+  if (upPct >= 55) return { text: 'Weak bullish', cls: 'text-accent-green/70' }
+  if (upPct <= 40) return { text: 'Bearish bias', cls: 'text-accent-red' }
+  if (upPct <= 45) return { text: 'Weak bearish', cls: 'text-accent-red/70' }
+  return { text: 'No directional bias', cls: 'text-text-secondary' }
+}
+
+export default function PatternCard({ pattern, totalTradingDays }) {
   const upColor =
     pattern.up_percentage >= 55
       ? 'text-accent-green'
       : pattern.up_percentage <= 45
         ? 'text-accent-red'
         : 'text-text-secondary'
+
+  const bias = biasLabel(pattern.up_percentage)
 
   return (
     <div className="bg-bg-secondary border border-border rounded-xl p-4">
@@ -24,11 +34,19 @@ export default function PatternCard({ pattern }) {
       <p className={`text-xl font-bold ${upColor}`}>
         UP {pattern.up_percentage.toFixed(0)}% of the time
       </p>
+      <p className={`text-[10px] mt-0.5 ${bias.cls}`}>{bias.text}</p>
 
       <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
         <div>
           <p className="text-text-secondary">Occurrences</p>
-          <p className="font-medium">{pattern.total_occurrences}</p>
+          <p className="font-medium">
+            {pattern.total_occurrences.toLocaleString()}
+            {totalTradingDays && (
+              <span className="text-text-secondary font-normal">
+                {' '}/ {totalTradingDays.toLocaleString()}
+              </span>
+            )}
+          </p>
         </div>
         <div>
           <p className="text-text-secondary">Avg Return</p>
@@ -36,7 +54,7 @@ export default function PatternCard({ pattern }) {
         </div>
         <div>
           <p className="text-text-secondary">p-value</p>
-          <p className="font-medium">
+          <p className={`font-medium ${pattern.p_value < 0.05 ? 'text-accent-green' : ''}`}>
             {pattern.p_value < 0.001 ? '<0.001' : pattern.p_value.toFixed(3)}
           </p>
         </div>

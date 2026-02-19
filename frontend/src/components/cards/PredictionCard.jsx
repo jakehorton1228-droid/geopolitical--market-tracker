@@ -1,5 +1,12 @@
 import { signalColor } from '../../lib/formatters'
 
+function confidenceLabel(prob) {
+  const p = Math.max(prob, 1 - prob) // distance from 0.5
+  if (p >= 0.65) return 'High confidence'
+  if (p >= 0.55) return 'Moderate confidence'
+  return 'Low confidence'
+}
+
 export default function PredictionCard({ prediction }) {
   const color = signalColor(prediction.probability_up)
 
@@ -9,9 +16,11 @@ export default function PredictionCard({ prediction }) {
         <span className="text-xs text-text-secondary uppercase tracking-wide">
           Logistic Regression
         </span>
-        <span className="text-xs text-text-secondary">
-          Acc: {(prediction.accuracy * 100).toFixed(0)}%
-        </span>
+        <div className="flex items-center gap-2 text-xs text-text-secondary">
+          <span>Acc: {(prediction.accuracy * 100).toFixed(0)}%</span>
+          <span className="text-border">|</span>
+          <span>{prediction.n_training_samples?.toLocaleString()} samples</span>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -20,6 +29,9 @@ export default function PredictionCard({ prediction }) {
         </span>
         <span className="text-lg text-text-secondary">
           {(prediction.probability_up * 100).toFixed(0)}% UP
+        </span>
+        <span className="text-xs text-text-secondary bg-bg-tertiary px-2 py-0.5 rounded">
+          {confidenceLabel(prediction.probability_up)}
         </span>
       </div>
 

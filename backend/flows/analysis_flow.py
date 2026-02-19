@@ -14,11 +14,11 @@ from src.config.constants import get_all_symbols, SYMBOLS
 
 
 @task(name="compute-correlations", retries=1, retry_delay_seconds=30, log_prints=True)
-def compute_correlations(days_back: int = 365) -> dict:
+def compute_correlations() -> dict:
     """Compute top correlation pairs across all symbols and cache results."""
     logger = get_run_logger()
     end_date = date.today()
-    start_date = end_date - timedelta(days=days_back)
+    start_date = date(2016, 1, 1)
 
     # Compute across ALL symbols for complete cache
     all_symbols = get_all_symbols()
@@ -52,11 +52,11 @@ def compute_correlations(days_back: int = 365) -> dict:
 
 
 @task(name="compute-patterns", retries=1, retry_delay_seconds=30, log_prints=True)
-def compute_patterns(days_back: int = 365) -> dict:
+def compute_patterns() -> dict:
     """Compute historical patterns for key symbols."""
     logger = get_run_logger()
     end_date = date.today()
-    start_date = end_date - timedelta(days=days_back)
+    start_date = date(2016, 1, 1)
 
     # Focus on most-traded symbols
     key_symbols = ["CL=F", "GC=F", "SPY", "QQQ", "^VIX", "EURUSD=X", "TLT", "EEM"]

@@ -92,7 +92,7 @@ def get_model_summary(
     if end_date is None:
         end_date = date.today()
     if start_date is None:
-        start_date = end_date - timedelta(days=365)
+        start_date = date(2016, 1, 1)
 
     analyzer = LogisticRegressionAnalyzer()
     summary = analyzer.get_model_summary(symbol, start_date, end_date)
