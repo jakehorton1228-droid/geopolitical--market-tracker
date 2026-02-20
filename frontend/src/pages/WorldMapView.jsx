@@ -14,7 +14,7 @@ import {
 import DateRangePicker from '../components/shared/DateRangePicker'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useEventsMap } from '../api/events'
-import { COLORS } from '../lib/constants'
+import { COLORS, ISO_NUM_TO_A3 } from '../lib/constants'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
@@ -91,7 +91,7 @@ export default function WorldMapView() {
                 <Geographies geography={GEO_URL}>
                   {({ geographies }) =>
                     geographies.map((geo) => {
-                      const iso = geo.properties.ISO_A3 || geo.properties.ADM0_A3
+                      const iso = ISO_NUM_TO_A3[geo.id] || geo.properties.ISO_A3
                       const countryData = countryLookup[iso]
                       const count = countryData?.event_count ?? 0
 
