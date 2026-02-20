@@ -162,6 +162,63 @@ EVENT_GROUPS = {
 }
 
 
+# FIPS 10-4 → ISO 3166-1 alpha-3 country code mapping.
+# GDELT stores action_geo_country_code as FIPS; the world map TopoJSON uses ISO_A3.
+FIPS_TO_ISO = {
+    "AA": "ABW", "AC": "ATG", "AE": "ARE", "AF": "AFG", "AG": "DZA",
+    "AJ": "AZE", "AL": "ALB", "AM": "ARM", "AN": "AND", "AO": "AGO",
+    "AQ": "ASM", "AR": "ARG", "AS": "AUS", "AU": "AUT", "BA": "BHR",
+    "BB": "BRB", "BC": "BWA", "BD": "BMU", "BE": "BEL", "BF": "BHS",
+    "BG": "BGD", "BH": "BLZ", "BK": "BIH", "BL": "BOL", "BM": "MMR",
+    "BN": "BEN", "BO": "BLR", "BP": "SLB", "BR": "BRA", "BT": "BTN",
+    "BU": "BGR", "BX": "BRN", "BY": "BDI", "CA": "CAN", "CB": "KHM",
+    "CD": "TCD", "CE": "LKA", "CF": "COG", "CG": "COD", "CH": "CHN",
+    "CI": "CHL", "CJ": "CYM", "CM": "CMR", "CN": "COM", "CO": "COL",
+    "CS": "CRI", "CT": "CAF", "CU": "CUB", "CV": "CPV", "CW": "COK",
+    "CY": "CYP", "DA": "DNK", "DJ": "DJI", "DO": "DMA", "DR": "DOM",
+    "EC": "ECU", "EG": "EGY", "EI": "IRL", "EK": "GNQ", "EN": "EST",
+    "ER": "ERI", "ES": "SLV", "ET": "ETH", "EZ": "CZE", "FI": "FIN",
+    "FJ": "FJI", "FK": "FLK", "FM": "FSM", "FO": "FRO", "FP": "PYF",
+    "FR": "FRA", "GA": "GMB", "GB": "GAB", "GG": "GEO", "GH": "GHA",
+    "GI": "GIB", "GJ": "GRD", "GL": "GRL", "GM": "DEU", "GP": "GLP",
+    "GQ": "GUM", "GR": "GRC", "GT": "GTM", "GV": "GIN", "GY": "GUY",
+    "GZ": "PSE", "HA": "HTI", "HK": "HKG", "HO": "HND", "HR": "HRV",
+    "HU": "HUN", "IC": "ISL", "ID": "IDN", "IM": "IMN", "IN": "IND",
+    "IO": "IOT", "IR": "IRN", "IS": "ISR", "IT": "ITA", "IV": "CIV",
+    "IZ": "IRQ", "JA": "JPN", "JE": "JEY", "JM": "JAM", "JO": "JOR",
+    "KE": "KEN", "KG": "KGZ", "KN": "PRK", "KR": "KIR", "KS": "KOR",
+    "KU": "KWT", "KV": "XKX", "KZ": "KAZ", "LA": "LAO", "LE": "LBN",
+    "LG": "LVA", "LH": "LTU", "LI": "LBR", "LO": "SVK", "LS": "LIE",
+    "LT": "LSO", "LU": "LUX", "LY": "LBY", "MA": "MDG", "MB": "MTQ",
+    "MC": "MAC", "MD": "MDA", "MG": "MNG", "MH": "MHL", "MI": "MWI",
+    "MJ": "MNE", "MK": "MKD", "ML": "MLI", "MN": "MCO", "MO": "MAR",
+    "MP": "MUS", "MR": "MRT", "MT": "MLT", "MU": "OMN", "MV": "MDV",
+    "MX": "MEX", "MY": "MYS", "MZ": "MOZ", "NC": "NCL", "NG": "NER",
+    "NH": "VUT", "NI": "NGA", "NL": "NLD", "NO": "NOR", "NP": "NPL",
+    "NR": "NRU", "NS": "SUR", "NU": "NIC", "NZ": "NZL", "OD": "SSD",
+    "PA": "PAN", "PE": "PER", "PK": "PAK", "PL": "POL", "PM": "PAN",
+    "PO": "PRT", "PP": "PNG", "PU": "GNB", "QA": "QAT", "RB": "SRB",
+    "RE": "REU", "RI": "SRB", "RM": "MHL", "RN": "MNE", "RO": "ROU",
+    "RP": "PHL", "RQ": "PRI", "RS": "RUS", "RW": "RWA", "SA": "SAU",
+    "SB": "SPM", "SC": "KNA", "SE": "SYC", "SF": "ZAF", "SG": "SEN",
+    "SH": "SHN", "SI": "SVN", "SL": "SLE", "SM": "SMR", "SN": "SGP",
+    "SO": "SOM", "SP": "ESP", "ST": "LCA", "SU": "SDN", "SV": "SJM",
+    "SW": "SWE", "SY": "SYR", "SZ": "CHE", "TD": "TTO", "TH": "THA",
+    "TI": "TJK", "TK": "TCA", "TL": "TKL", "TN": "TON", "TO": "TGO",
+    "TP": "STP", "TS": "TUN", "TT": "TLS", "TU": "TUR", "TV": "TUV",
+    "TW": "TWN", "TX": "TKM", "TZ": "TZA", "UG": "UGA", "UK": "GBR",
+    "UP": "UKR", "US": "USA", "UV": "BFA", "UY": "URY", "UZ": "UZB",
+    "VC": "VCT", "VE": "VEN", "VI": "VIR", "VM": "VNM", "VQ": "VIR",
+    "VT": "VAT", "WA": "NAM", "WE": "PSE", "WI": "ESH", "WS": "WSM",
+    "WZ": "SWZ", "YM": "YEM", "ZA": "ZMB", "ZI": "ZWE",
+}
+
+
+def fips_to_iso(fips_code: str) -> str:
+    """Convert a FIPS 10-4 country code to ISO 3166-1 alpha-3."""
+    return FIPS_TO_ISO.get(fips_code, fips_code)
+
+
 def get_event_category(event_root_code: str) -> str:
     """Map CAMEO root code to category."""
     code = str(event_root_code).zfill(2)[:2]

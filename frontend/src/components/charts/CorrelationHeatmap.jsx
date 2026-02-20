@@ -19,11 +19,11 @@ export default function CorrelationHeatmap({ data }) {
           </tr>
         </thead>
         <tbody>
-          {symbols.map((sym) => (
+          {symbols.map((sym, symIdx) => (
             <tr key={sym} className="border-t border-border/50">
               <td className="p-1 font-medium text-text-primary">{sym}</td>
-              {event_metrics.map((m) => {
-                const val = matrix[sym]?.[m] ?? 0
+              {event_metrics.map((m, metricIdx) => {
+                const val = matrix[symIdx]?.[metricIdx] ?? 0
                 return (
                   <td
                     key={m}

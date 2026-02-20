@@ -14,11 +14,11 @@ USAGE:
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func, or_, text
 
 from src.db.connection import get_session
 from src.db.models import MarketData, Event
-from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info, SYMBOL_COUNTRY_MAP, get_event_group
+from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info, SYMBOL_COUNTRY_MAP, EVENT_GROUPS
 from src.api.schemas import MarketDataResponse
 
 router = APIRouter(prefix="/market", tags=["Market Data"])
@@ -267,59 +267,97 @@ def get_symbol_with_events(
     if not market_rows:
         raise HTTPException(status_code=404, detail=f"No data for '{symbol}'")
 
-    # Fetch relevant events (filtered by countries that matter for this symbol)
+    # Build country filter for events relevant to this symbol
     relevant_countries = SYMBOL_COUNTRY_MAP.get(symbol, [])
+    country_filter = []
+    if relevant_countries:
+        country_filter = [or_(
+            Event.actor1_country_code.in_(relevant_countries),
+            Event.actor2_country_code.in_(relevant_countries),
+            Event.action_geo_country_code.in_(relevant_countries),
+        )]
 
-    event_query = db.query(Event).filter(
-        Event.event_date >= start_date,
-        Event.event_date <= end_date,
+    # Conflict = codes 14-20, Cooperation = codes 01-08
+    conflict_codes = EVENT_GROUPS["material_conflict"] + EVENT_GROUPS["violent_conflict"]
+    cooperation_codes = (
+        EVENT_GROUPS["verbal_cooperation"] + EVENT_GROUPS["material_cooperation"]
     )
 
-    if relevant_countries:
-        event_query = event_query.filter(
-            Event.action_geo_country_code.in_(relevant_countries)
-        )
+    # SQL aggregation: counts, avg goldstein, mentions, conflict/cooperation per date
+    agg_query = db.query(
+        Event.event_date.label("date"),
+        func.count(Event.id).label("event_count"),
+        func.avg(Event.goldstein_scale).label("avg_goldstein"),
+        func.sum(Event.num_mentions).label("total_mentions"),
+        func.sum(case(
+            (Event.event_root_code.in_(conflict_codes), 1), else_=0,
+        )).label("conflict_count"),
+        func.sum(case(
+            (Event.event_root_code.in_(cooperation_codes), 1), else_=0,
+        )).label("cooperation_count"),
+    ).filter(
+        Event.event_date >= start_date,
+        Event.event_date <= end_date,
+        *country_filter,
+    )
 
     if min_mentions > 0:
-        event_query = event_query.filter(Event.num_mentions >= min_mentions)
+        agg_query = agg_query.filter(Event.num_mentions >= min_mentions)
 
-    events = event_query.all()
+    agg_rows = agg_query.group_by(Event.event_date).all()
 
-    # Aggregate events by date
-    events_by_date: dict[date, dict] = {}
-    for e in events:
-        d = e.event_date
-        if d not in events_by_date:
-            events_by_date[d] = {
-                "event_count": 0,
-                "avg_goldstein": 0.0,
-                "total_mentions": 0,
-                "conflict_count": 0,
-                "cooperation_count": 0,
-                "_goldstein_sum": 0.0,
-                "top_event": None,
-            }
+    # Build lookup: date -> aggregated event stats
+    events_by_date = {}
+    for row in agg_rows:
+        events_by_date[row.date] = {
+            "event_count": row.event_count,
+            "avg_goldstein": round(float(row.avg_goldstein), 2) if row.avg_goldstein else 0,
+            "total_mentions": int(row.total_mentions or 0),
+            "conflict_count": int(row.conflict_count or 0),
+            "cooperation_count": int(row.cooperation_count or 0),
+        }
 
-        agg = events_by_date[d]
-        agg["event_count"] += 1
-        agg["total_mentions"] += (e.num_mentions or 0)
-        agg["_goldstein_sum"] += (e.goldstein_scale or 0)
+    # Top event per date (highest mentions) — use DISTINCT ON
+    top_event_sql = text("""
+        SELECT DISTINCT ON (event_date)
+            event_date, id, action_geo_name, goldstein_scale,
+            num_mentions, event_root_code
+        FROM events
+        WHERE event_date >= :start AND event_date <= :end
+          AND event_date = ANY(:dates)
+          AND (:no_country_filter OR actor1_country_code = ANY(:countries)
+               OR actor2_country_code = ANY(:countries)
+               OR action_geo_country_code = ANY(:countries))
+        ORDER BY event_date, num_mentions DESC NULLS LAST
+    """)
 
-        group = get_event_group(e.event_root_code) if e.event_root_code else "other"
-        if group in ("violent_conflict", "material_conflict"):
-            agg["conflict_count"] += 1
-        elif group in ("verbal_cooperation", "material_cooperation"):
-            agg["cooperation_count"] += 1
+    event_dates = list(events_by_date.keys())
+    if event_dates:
+        top_rows = db.execute(top_event_sql, {
+            "start": start_date,
+            "end": end_date,
+            "dates": event_dates,
+            "countries": relevant_countries or [],
+            "no_country_filter": not relevant_countries,
+        }).fetchall()
 
-        # Track highest-mention event as the "top event" for that day
-        if agg["top_event"] is None or (e.num_mentions or 0) > (agg["top_event"].get("mentions", 0)):
-            agg["top_event"] = {
-                "id": e.id,
-                "description": e.action_geo_name or "",
-                "goldstein": e.goldstein_scale,
-                "mentions": e.num_mentions or 0,
-                "group": group,
-            }
+        # Map event_root_code to group name
+        code_to_group = {}
+        for group_name, codes in EVENT_GROUPS.items():
+            for code in codes:
+                code_to_group[code] = group_name
+
+        for row in top_rows:
+            d = row.event_date
+            if d in events_by_date:
+                root_code = str(row.event_root_code).zfill(2)[:2] if row.event_root_code else ""
+                events_by_date[d]["top_event"] = {
+                    "id": row.id,
+                    "description": row.action_geo_name or "",
+                    "goldstein": row.goldstein_scale,
+                    "mentions": row.num_mentions or 0,
+                    "group": code_to_group.get(root_code, "other"),
+                }
 
     # Build response: market data + event overlay
     result = []
@@ -336,13 +374,7 @@ def get_symbol_with_events(
 
         event_agg = events_by_date.get(m.date)
         if event_agg:
-            ec = event_agg["event_count"]
-            row["event_count"] = ec
-            row["avg_goldstein"] = round(event_agg["_goldstein_sum"] / ec, 2) if ec > 0 else 0
-            row["total_mentions"] = event_agg["total_mentions"]
-            row["conflict_count"] = event_agg["conflict_count"]
-            row["cooperation_count"] = event_agg["cooperation_count"]
-            row["top_event"] = event_agg["top_event"]
+            row.update(event_agg)
         else:
             row["event_count"] = 0
 

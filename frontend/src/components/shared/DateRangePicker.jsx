@@ -4,6 +4,8 @@ const PRESETS = [
   { label: '90D', days: 90 },
   { label: '180D', days: 180 },
   { label: '1Y', days: 365 },
+  { label: '5Y', days: 1825 },
+  { label: '10Y', days: 3650 },
 ]
 
 function daysAgo(n) {

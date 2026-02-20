@@ -16,9 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from sqlalchemy import case
+
 from src.db.connection import get_session
 from src.db.models import Event
-from src.config.constants import EVENT_GROUPS, CAMEO_CATEGORIES, get_event_group
+from src.config.constants import EVENT_GROUPS, CAMEO_CATEGORIES, get_event_group, fips_to_iso
 from src.api.schemas import EventResponse, EventQuery
 
 router = APIRouter(prefix="/events", tags=["Events"])
@@ -193,15 +195,32 @@ def events_for_map(
     """
     Get events aggregated by country for map visualization.
 
-    Returns country_code, event counts by group, avg Goldstein, total mentions,
-    and representative lat/long for map pin placement.
+    Returns ISO_A3 country_code, event counts by group, avg Goldstein,
+    and total mentions. Uses SQL aggregation for performance.
     """
     if not end_date:
         end_date = date.today()
     if not start_date:
         start_date = end_date - timedelta(days=365)
 
-    query = db.query(Event).filter(
+    # Conflict = codes 14-20, Cooperation = codes 01-08
+    conflict_codes = EVENT_GROUPS["material_conflict"] + EVENT_GROUPS["violent_conflict"]
+    cooperation_codes = (
+        EVENT_GROUPS["verbal_cooperation"] + EVENT_GROUPS["material_cooperation"]
+    )
+
+    query = db.query(
+        Event.action_geo_country_code.label("fips_code"),
+        func.count(Event.id).label("event_count"),
+        func.avg(Event.goldstein_scale).label("avg_goldstein"),
+        func.sum(Event.num_mentions).label("total_mentions"),
+        func.sum(case(
+            (Event.event_root_code.in_(conflict_codes), 1), else_=0,
+        )).label("conflict_count"),
+        func.sum(case(
+            (Event.event_root_code.in_(cooperation_codes), 1), else_=0,
+        )).label("cooperation_count"),
+    ).filter(
         Event.event_date >= start_date,
         Event.event_date <= end_date,
         Event.action_geo_country_code.isnot(None),
@@ -216,51 +235,21 @@ def events_for_map(
     if min_mentions is not None:
         query = query.filter(Event.num_mentions >= min_mentions)
 
-    events = query.all()
+    rows = query.group_by(Event.action_geo_country_code).all()
 
-    if not events:
+    if not rows:
         return []
 
-    # Aggregate by country
-    country_data: dict[str, dict] = {}
-    for e in events:
-        cc = e.action_geo_country_code
-        if cc not in country_data:
-            country_data[cc] = {
-                "country_code": cc,
-                "event_count": 0,
-                "avg_goldstein": 0.0,
-                "total_mentions": 0,
-                "conflict_count": 0,
-                "cooperation_count": 0,
-                "lat": e.action_geo_lat,
-                "long": e.action_geo_long,
-                "_goldstein_sum": 0.0,
-            }
-
-        d = country_data[cc]
-        d["event_count"] += 1
-        d["total_mentions"] += (e.num_mentions or 0)
-        d["_goldstein_sum"] += (e.goldstein_scale or 0)
-
-        group = get_event_group(e.event_root_code) if e.event_root_code else "other"
-        if group in ("violent_conflict", "material_conflict"):
-            d["conflict_count"] += 1
-        elif group in ("verbal_cooperation", "material_cooperation"):
-            d["cooperation_count"] += 1
-
-        # Use first available lat/long per country
-        if d["lat"] is None and e.action_geo_lat is not None:
-            d["lat"] = e.action_geo_lat
-            d["long"] = e.action_geo_long
-
-    # Finalize averages and clean up internal fields
     results = []
-    for d in country_data.values():
-        if d["event_count"] > 0:
-            d["avg_goldstein"] = round(d["_goldstein_sum"] / d["event_count"], 2)
-        del d["_goldstein_sum"]
-        results.append(d)
+    for r in rows:
+        results.append({
+            "country_code": fips_to_iso(r.fips_code),
+            "event_count": r.event_count,
+            "avg_goldstein": round(float(r.avg_goldstein), 2) if r.avg_goldstein else 0,
+            "total_mentions": int(r.total_mentions or 0),
+            "conflict_count": int(r.conflict_count or 0),
+            "cooperation_count": int(r.cooperation_count or 0),
+        })
 
     results.sort(key=lambda x: x["event_count"], reverse=True)
     return results

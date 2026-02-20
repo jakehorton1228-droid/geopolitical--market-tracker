@@ -28,7 +28,7 @@ function daysAgo(n) {
 
 export default function CorrelationExplorer() {
   const [symbol, setSymbol] = useState('CL=F')
-  const [startDate, setStartDate] = useState(daysAgo(365))
+  const [startDate, setStartDate] = useState(daysAgo(3650))
   const [endDate, setEndDate] = useState(daysAgo(0))
   const [selectedMetric, setSelectedMetric] = useState('conflict_count')
   const [method, setMethod] = useState('pearson')

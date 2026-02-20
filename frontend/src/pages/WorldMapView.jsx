@@ -32,6 +32,14 @@ function eventIntensityColor(count) {
   return '#374151'
 }
 
+function eventHoverColor(count) {
+  if (count > 500) return '#f87171'
+  if (count > 200) return '#fbbf24'
+  if (count > 50) return '#60a5fa'
+  if (count > 10) return '#818cf8'
+  return '#4b5563'
+}
+
 export default function WorldMapView() {
   const [startDate, setStartDate] = useState(daysAgo(365))
   const [endDate, setEndDate] = useState(daysAgo(0))
@@ -96,8 +104,8 @@ export default function WorldMapView() {
                           stroke={COLORS.border}
                           strokeWidth={0.5}
                           style={{
-                            hover: { fill: '#6366f1', cursor: count > 0 ? 'pointer' : 'default' },
-                            pressed: { fill: '#4f46e5' },
+                            hover: { fill: eventHoverColor(count), cursor: count > 0 ? 'pointer' : 'default' },
+                            pressed: { fill: eventIntensityColor(count) },
                           }}
                         />
                       )

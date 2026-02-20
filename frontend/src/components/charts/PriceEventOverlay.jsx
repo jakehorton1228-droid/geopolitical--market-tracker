@@ -1,6 +1,6 @@
 /** Combined line+scatter chart: price line with geopolitical event dot overlay. */
 import {
-  ComposedChart, Line, Scatter, XAxis, YAxis, Tooltip,
+  ComposedChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { COLORS } from '../../lib/constants'
@@ -12,14 +12,6 @@ function eventColor(row) {
 }
 
 export default function PriceEventOverlay({ data, symbol }) {
-  const withEvents = data
-    .filter((d) => d.event_count > 0)
-    .map((d) => ({
-      ...d,
-      eventDot: d.close,
-      dotColor: eventColor(d),
-    }))
-
   return (
     <div className="bg-bg-secondary border border-border rounded-xl p-4">
       <h3 className="text-sm font-medium text-text-primary mb-3">
@@ -51,31 +43,29 @@ export default function PriceEventOverlay({ data, symbol }) {
             }}
           />
           <Line
-            type="monotone"
+            type="linear"
             dataKey="close"
             stroke={COLORS.blue}
             strokeWidth={1.5}
-            dot={false}
-          />
-          <Scatter
-            data={withEvents}
-            dataKey="eventDot"
-            fill={COLORS.red}
-            shape={(props) => {
+            dot={(props) => {
               const { cx, cy, payload } = props
-              const r = Math.min(3 + (payload.event_count || 0) * 0.3, 8)
+              if (!payload.event_count || payload.event_count <= 0) return <circle r={0} />
+              const color = eventColor(payload)
+              const r = Math.min(3 + payload.event_count * 0.3, 8)
               return (
                 <circle
+                  key={payload.date}
                   cx={cx}
                   cy={cy}
                   r={r}
-                  fill={payload.dotColor}
+                  fill={color}
                   fillOpacity={0.7}
-                  stroke={payload.dotColor}
+                  stroke={color}
                   strokeWidth={1}
                 />
               )
             }}
+            activeDot={false}
           />
         </ComposedChart>
       </ResponsiveContainer>

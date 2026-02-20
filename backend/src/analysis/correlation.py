@@ -65,14 +65,9 @@ class CorrelationAnalyzer:
         end_date: date,
     ) -> pd.DataFrame:
         """Fetch and aggregate events once for reuse across symbols."""
-        events_df = self.fe.fetch_events(start_date, end_date, include_cooperation=True)
-        if events_df.empty:
-            return pd.DataFrame()
-
-        return self.fe.aggregate_events(
-            events_df,
+        return self.fe.fetch_events_aggregated_sql(
+            start_date, end_date,
             goldstein_metrics=["mean"],
-            mention_metrics=["sum"],
             include_cooperation=True,
         )
 
