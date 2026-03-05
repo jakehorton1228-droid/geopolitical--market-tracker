@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
-from src.db.models import Event, MarketData, AnalysisResult, EventMarketLink
+from src.db.models import Event, MarketData, AnalysisResult, EventMarketLink, NewsHeadline
 from src.config.constants import get_event_group
 
 
@@ -479,3 +479,90 @@ def get_cached_correlations(
         }
         for r in rows
     ]
+
+# =============================================================================
+# NEWS HEADLINE QUERIES
+# =============================================================================
+
+
+def upsert_headline(session: Session, headline_data: dict) -> NewsHeadline | None:
+    """
+    Insert a headline if its URL doesn't already exist. Skip if it does.
+
+    Unlike upsert_event() which UPDATES existing rows, headlines don't change
+    after publication — so we just skip duplicates entirely.
+
+    Args:
+        session: Database session
+        headline_data: Dict with keys matching NewsHeadline columns
+
+    Returns:
+        The new NewsHeadline object, or None if it already existed
+    """
+    # Check if we already have this URL
+    existing = session.query(NewsHeadline).filter(
+        NewsHeadline.url == headline_data["url"]
+    ).first()
+
+    if existing:
+        return None  # Already ingested, skip
+
+    headline = NewsHeadline(**headline_data)
+    session.add(headline)
+    return headline
+
+
+def get_headlines_by_date_range(
+    session: Session,
+    start_date: date,
+    end_date: date,
+    source: str | None = None,
+) -> list[NewsHeadline]:
+    """
+    Fetch headlines within a date range, optionally filtered by source.
+
+    Mirrors get_events_by_date_range() but for news headlines.
+    Note: published_at is DateTime, so we compare against the date portion.
+
+    Args:
+        session: Database session
+        start_date: Start of range (inclusive)
+        end_date: End of range (inclusive)
+        source: Filter by source name ("reuters", "ap", "bbc", "aljazeera")
+
+    Returns:
+        List of NewsHeadline objects, newest first
+    """
+    query = session.query(NewsHeadline).filter(
+        func.date(NewsHeadline.published_at) >= start_date,
+        func.date(NewsHeadline.published_at) <= end_date,
+    )
+
+    if source:
+        query = query.filter(NewsHeadline.source == source)
+
+    return query.order_by(NewsHeadline.published_at.desc()).all()
+
+
+def get_latest_headline_date(session: Session, source: str | None = None) -> date | None:
+    """
+    Get the most recent headline date, optionally for a specific source.
+
+    Used by the ingestion module to avoid re-fetching headlines we already have.
+    Mirrors get_latest_market_date().
+
+    Args:
+        session: Database session
+        source: Optional source filter
+
+    Returns:
+        The date of the most recent headline, or None if table is empty
+    """
+    query = session.query(func.max(NewsHeadline.published_at))
+
+    if source:
+        query = query.filter(NewsHeadline.source == source)
+
+    result = query.scalar()
+    # published_at is DateTime, return just the date portion
+    return result.date() if result else None

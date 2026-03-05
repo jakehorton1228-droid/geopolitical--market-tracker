@@ -255,3 +255,35 @@ class CorrelationCache(Base):
     __table_args__ = (
         UniqueConstraint("symbol", "event_metric", "method", name="uq_correlation_cache"),
     )
+
+class NewsHeadline(Base):
+    """
+    News headlines from RSS feeds (Reuters, AP, BBC, Al Jazeera).
+
+    Ingested on a schedule to capture the news narrative around geopolitical
+    events. Headlines are the raw input for sentiment analysis (Phase 2) —
+    sentiment_score and sentiment_label remain NULL until then.
+
+    The URL serves as the natural dedup key: same article = same URL.
+    """
+    __tablename__ = "news_headlines"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(20), nullable=False, index=True)  # "reuters", "ap", "bbc", "aljazeera"
+    headline = Column(Text, nullable=False)
+    url = Column(Text, nullable=False, unique=True)
+    description = Column(Text, nullable=True)  # RSS summary, can be long or absent
+    published_at = Column(DateTime, nullable=False, index=True)
+
+    # Sentiment — populated in Phase 2 by analysis/sentiment.py
+    sentiment_score = Column(Float, nullable=True)  # -1.0 (negative) to +1.0 (positive)
+    sentiment_label = Column(String(10), nullable=True)  # "positive", "negative", "neutral"
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_news_headlines_source_published", "source", "published_at"),
+    )
+
+    def __repr__(self):
+        return f"<NewsHeadline {self.source}: {self.headline[:50]}>"

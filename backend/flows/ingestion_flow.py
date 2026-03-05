@@ -1,9 +1,12 @@
 """
 Prefect flow for daily data ingestion.
 
-Ingests GDELT geopolitical events and Yahoo Finance market data.
+Ingests GDELT geopolitical events, Yahoo Finance market data,
+and RSS news headlines.
+
 Uses a 3-day overlap for events (late-arriving data) and 7-day
-window for market data (covers weekends/holidays).
+window for market data (covers weekends/holidays). RSS feeds
+are fetched in full each run — deduplication happens at the DB level.
 """
 
 from datetime import date, timedelta
@@ -11,6 +14,7 @@ from prefect import flow, task, get_run_logger
 
 from src.ingestion.gdelt import GDELTIngestion
 from src.ingestion.market_data import MarketDataIngestion
+from src.ingestion.rss_feeds import RSSIngestion
 
 
 @task(name="ingest-events", retries=3, retry_delay_seconds=60, log_prints=True)
@@ -50,17 +54,34 @@ def ingest_market(days_back: int = 7) -> dict:
     return {"rows_ingested": total, "symbols_updated": symbols_ok}
 
 
+@task(name="ingest-rss", retries=2, retry_delay_seconds=60, log_prints=True)
+def ingest_rss() -> dict:
+    """Ingest news headlines from all configured RSS feeds."""
+    logger = get_run_logger()
+    logger.info("Ingesting RSS news headlines")
+
+    rss = RSSIngestion()
+    result = rss.ingest_all_feeds()
+
+    total = sum(v for v in result.values() if v > 0)
+    feeds_ok = sum(1 for v in result.values() if v >= 0)
+    logger.info(f"Ingested {total} new headlines from {feeds_ok} feeds")
+
+    return {"headlines_ingested": total, "feeds": result}
+
+
 @flow(name="daily-ingestion", retries=2, retry_delay_seconds=300, log_prints=True)
 def daily_ingestion() -> dict:
-    """Run daily data ingestion: events + market data."""
+    """Run daily data ingestion: events + market data + RSS headlines."""
     logger = get_run_logger()
     logger.info("Starting daily ingestion pipeline")
 
     events_result = ingest_events()
     market_result = ingest_market()
+    rss_result = ingest_rss()
 
     logger.info("Daily ingestion complete")
-    return {"events": events_result, "market": market_result}
+    return {"events": events_result, "market": market_result, "rss": rss_result}
 
 
 if __name__ == "__main__":

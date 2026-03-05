@@ -27,6 +27,19 @@ FRED_API_KEY = os.getenv("FRED_API_KEY")
 GDELT_EVENTS_URL = "http://data.gdeltproject.org/events"
 GDELT_MIN_MENTIONS = 200  # Minimum mentions to consider an event significant
 
+# RSS Feed settings
+# Each feed is a dict with a name (our internal label) and URL.
+# These are the "world news" feeds — focused on geopolitics, not sports/entertainment.
+RSS_FEEDS = [
+    # Google News RSS aggregates Reuters world coverage (Reuters killed their direct feed)
+    {"name": "reuters", "url": "https://news.google.com/rss/search?q=site:reuters.com+world&hl=en-US&gl=US&ceid=US:en"},
+    # Google News RSS aggregates AP world coverage (AP has no reliable public feed)
+    {"name": "ap", "url": "https://news.google.com/rss/search?q=site:apnews.com+world&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "bbc", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
+    {"name": "aljazeera", "url": "https://www.aljazeera.com/xml/rss/all.xml"},
+]
+RSS_REQUEST_TIMEOUT = 30  # Seconds to wait for a feed response
+
 # AI Agent
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 AGENT_MODEL = "claude-sonnet-4-20250514"

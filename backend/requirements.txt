@@ -15,6 +15,7 @@ pydantic>=2.0.0
 # Data fetching
 yfinance>=0.2.0
 requests>=2.31.0
+feedparser>=6.0.0
 
 # Analysis
 scipy>=1.11.0
