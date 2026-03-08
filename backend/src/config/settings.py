@@ -40,6 +40,35 @@ RSS_FEEDS = [
 ]
 RSS_REQUEST_TIMEOUT = 30  # Seconds to wait for a feed response
 
+# FRED (Federal Reserve Economic Data) settings
+# Each series has an ID (FRED's identifier), a human-readable name, and frequency.
+# Frequency is informational — all observations are stored the same way.
+FRED_SERIES = [
+    {"id": "GDP", "name": "Gross Domestic Product", "frequency": "quarterly"},
+    {"id": "CPIAUCSL", "name": "Consumer Price Index", "frequency": "monthly"},
+    {"id": "UNRATE", "name": "Unemployment Rate", "frequency": "monthly"},
+    {"id": "DFF", "name": "Federal Funds Rate", "frequency": "daily"},
+    {"id": "DGS10", "name": "10-Year Treasury Yield", "frequency": "daily"},
+    {"id": "UMCSENT", "name": "Consumer Sentiment (Michigan)", "frequency": "monthly"},
+]
+FRED_REQUEST_TIMEOUT = 30  # Seconds to wait for FRED API response
+
+# Polymarket prediction market settings
+# No API key needed — Polymarket's Gamma API is fully public.
+# We filter events by tags to find geopolitically relevant markets.
+POLYMARKET_GEOPOLITICAL_TAGS = {
+    "geopolitics", "world", "politics", "economy", "economic-policy",
+    "elections", "global-elections", "world-elections",
+    "foreign-policy", "diplomacy-ceasefire", "military-strikes",
+    "iran", "russia", "china", "ukraine", "israel", "middle-east",
+    "fed", "fed-rates", "tariffs", "sanctions", "oil", "commodities",
+}
+POLYMARKET_EXCLUDE_TAGS = {
+    "sports", "soccer", "nba", "nfl", "nhl", "mlb", "basketball", "baseball",
+    "football", "mma", "games", "epl", "crypto", "pop-culture", "tweets-markets",
+}
+POLYMARKET_REQUEST_TIMEOUT = 30
+
 # AI Agent
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 AGENT_MODEL = "claude-sonnet-4-20250514"

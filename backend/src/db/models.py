@@ -287,3 +287,79 @@ class NewsHeadline(Base):
 
     def __repr__(self):
         return f"<NewsHeadline {self.source}: {self.headline[:50]}>"
+
+
+class EconomicIndicator(Base):
+    """
+    Economic indicators from FRED (Federal Reserve Economic Data).
+
+    Each row is a single observation: one value for one series on one date.
+    For example: GDP = 27610.1 on 2024-01-01, or UNRATE = 3.7 on 2024-02-01.
+
+    Series have different frequencies (daily, monthly, quarterly) but we store
+    them all the same way — the date is the observation date FRED reports.
+
+    The (series_id, date) pair is the natural dedup key.
+    """
+    __tablename__ = "economic_indicators"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    series_id = Column(String(20), nullable=False, index=True)  # "GDP", "CPIAUCSL", etc.
+    series_name = Column(String(100), nullable=False)  # Human-readable name
+    date = Column(Date, nullable=False, index=True)
+    value = Column(Float, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("series_id", "date", name="uq_economic_indicator_series_date"),
+        Index("ix_economic_indicators_series_date", "series_id", "date"),
+    )
+
+    def __repr__(self):
+        return f"<EconomicIndicator {self.series_id} {self.date}: {self.value}>"
+
+
+class PredictionMarket(Base):
+    """
+    Prediction market snapshots from Polymarket.
+
+    Each row is a point-in-time snapshot of a market's probability. We store
+    one snapshot per market per day. Tracking daily snapshots lets us see how
+    crowd-estimated probabilities shift over time — a leading indicator of
+    geopolitical risk that complements our backward-looking event data.
+
+    The yes_price IS the implied probability: $0.35 = 35% chance of "Yes".
+
+    The (market_id, snapshot_date) pair is the dedup key — one snapshot per
+    market per day.
+    """
+    __tablename__ = "prediction_markets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    market_id = Column(String(20), nullable=False, index=True)  # Polymarket's ID
+    question = Column(Text, nullable=False)  # "Will Russia and Ukraine reach a ceasefire?"
+    event_title = Column(String(255), nullable=True)  # Parent event grouping
+
+    # The key data: probability and trading activity
+    yes_price = Column(Float, nullable=False)  # 0.0-1.0, this IS the probability
+    volume_24h = Column(Float, nullable=True)  # USD volume in last 24h
+    total_volume = Column(Float, nullable=True)  # Lifetime USD volume
+    liquidity = Column(Float, nullable=True)  # Current liquidity pool
+
+    # Market metadata
+    end_date = Column(String(30), nullable=True)  # When the market resolves
+
+    # Snapshot timing
+    snapshot_at = Column(DateTime, nullable=False, index=True)
+    snapshot_date = Column(Date, nullable=False, index=True)  # Derived from snapshot_at for dedup
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("market_id", "snapshot_date", name="uq_prediction_market_snapshot"),
+        Index("ix_prediction_markets_market_date", "market_id", "snapshot_date"),
+    )
+
+    def __repr__(self):
+        return f"<PredictionMarket {self.market_id}: {self.question[:50]} @ {self.yes_price}>"

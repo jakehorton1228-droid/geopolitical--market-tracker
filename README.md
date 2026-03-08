@@ -1,23 +1,25 @@
 # Geopolitical Market Tracker
 
-A full-stack application that correlates global geopolitical events with financial market movements. It surfaces historical patterns, computes correlations, predicts market direction using interpretable models, and provides an AI-powered analyst agent that can answer natural language questions about the data.
+A full-stack intelligence platform that fuses geopolitical events, financial markets, economic indicators, news headlines, and prediction market odds into a unified situational awareness dashboard. It surfaces historical patterns, computes correlations, predicts market direction using interpretable models, and provides an AI-powered analyst agent that can answer natural language questions about the data.
 
 ## About This Project
 
 This is a personal project focused on building a complete full-stack system from scratch — React frontend, Python backend, PostgreSQL database, and an AI agent layer.
 
 **Skills practiced:**
-- **Frontend**: React, Vite, Tailwind CSS, Recharts, React Query
+- **Frontend**: React, Vite, Tailwind CSS, Recharts, Framer Motion, React Query
 - **Backend**: FastAPI, SQLAlchemy, Pydantic
 - **Data Science**: Correlation analysis, logistic regression, anomaly detection, statistical testing
-- **Data Engineering**: ETL pipelines, database design, API design
-- **AI Engineering**: Claude API tool use, agentic loops, prompt engineering
+- **Data Engineering**: ETL pipelines (5 data sources), database design, API design
+- **AI Engineering**: Claude API tool use, agentic loops, prompt engineering, LangGraph (multi-agent)
 - **DevOps**: Docker, nginx, Prefect orchestration, Makefile automation
 
 **Built with Claude Code** — This project leverages [Claude Code](https://claude.com/claude-code) as an AI pair programmer.
 
 ## What It Does
 
+- **Intelligence Briefing**: Flagship dashboard fusing all 5 data sources — FRED macro indicators, prediction market movers, fused event/price timeline, news headlines, and a risk radar showing which countries/topics are heating up
+- **Prediction Markets**: Browse geopolitical prediction markets from Polymarket — probabilities, volume, trend charts for events like "US-Iran ceasefire" or "Fed rate decision"
 - **Dashboard**: Overview of event counts, tracked symbols, strongest correlations, and recent high-impact events
 - **Correlation Explorer**: See how event metrics (conflict count, Goldstein scores, media mentions) correlate with market returns across 33 symbols
 - **Event Timeline**: Price charts overlaid with geopolitical event dots — red for conflict, green for cooperation
@@ -27,21 +29,33 @@ This is a personal project focused on building a complete full-stack system from
   - **Level 2 (Logistic Regression)**: "Based on today's event profile, probability of UP: 64%. Key drivers: Goldstein score, media coverage"
 - **AI Agent**: Chat interface powered by Claude that can query events, run correlations, analyze patterns, make predictions, and detect anomalies using natural language
 
+## Data Sources (5)
+
+| Source | What It Captures | Update Frequency | Time Horizon |
+|--------|-----------------|------------------|--------------|
+| [GDELT](https://www.gdeltproject.org/) | Geopolitical events (conflicts, diplomacy, protests) | Daily | Backward-looking |
+| [Yahoo Finance](https://finance.yahoo.com/) | Market prices for 33 symbols (OHLCV) | Daily | Current |
+| RSS Feeds | News headlines (Reuters, AP, BBC, Al Jazeera) | Every run | Backward-looking |
+| [FRED](https://fred.stlouisfed.org/) | Economic indicators (GDP, CPI, unemployment, Fed rate, 10Y yield, consumer sentiment) | Daily/Monthly/Quarterly | Lagging |
+| [Polymarket](https://polymarket.com/) | Prediction market odds for geopolitical events | Daily snapshots | Forward-looking |
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       React Frontend (Vite)                         │
-│  Dashboard │ Correlations │ Timeline │ World Map │ Signals │ Agent  │
-│  Recharts  │ React Query  │ Tailwind │ React Simple Maps           │
+│                    React Frontend (Vite + Framer Motion)             │
+│  Briefing │ Predictions │ Dashboard │ Correlations │ Timeline       │
+│  Map │ Signals │ Agent Chat                                         │
+│  Recharts │ React Query │ Tailwind │ React Simple Maps              │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │ /api proxy (nginx)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      FastAPI Backend                                │
-│  /api/events      │ /api/market       │ /api/analysis              │
-│  /api/correlation  │ /api/patterns    │ /api/predictions           │
-│  /api/agent/chat  (Claude tool use)                                │
+│  /api/events       │ /api/market        │ /api/analysis             │
+│  /api/correlation  │ /api/patterns      │ /api/predictions          │
+│  /api/indicators   │ /api/headlines     │ /api/prediction-markets   │
+│  /api/briefing     │ /api/risk          │ /api/agent/chat           │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
                 ┌────────────────┼────────────────┐
@@ -50,16 +64,19 @@ This is a personal project focused on building a complete full-stack system from
 │    PostgreSQL      │  │ Analysis Layer │  │    AI Agent        │
 │  Events            │  │ Correlation    │  │ Claude API         │
 │  MarketData        │  │ Hist. Patterns │  │ 10 tools           │
-│  CorrelationCache  │  │ Logistic Reg.  │  │ Calls analysis     │
-│  AnalysisResults   │  │ Event Study    │  │ functions directly  │
-└────────────────────┘  │ Anomaly Det.   │  └────────────────────┘
-                        └────────────────┘
+│  NewsHeadlines     │  │ Logistic Reg.  │  │ Calls analysis     │
+│  EconomicIndicators│  │ Event Study    │  │ functions directly  │
+│  PredictionMarkets │  │ Anomaly Det.   │  │                    │
+│  CorrelationCache  │  └────────────────┘  └────────────────────┘
+│  AnalysisResults   │
+└────────────────────┘
 
-Data Sources: GDELT (events) + Yahoo Finance (prices)
+Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Prefect Orchestration                             │
-│  Daily Pipeline: Ingest Events → Ingest Market → Run Analysis       │
+│  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →       │
+│                  Analysis                                           │
 │  Prefect UI: http://localhost:4200                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -72,9 +89,11 @@ Data Sources: GDELT (events) + Yahoo Finance (prices)
 git clone https://github.com/YOUR_USERNAME/geopolitical-market-tracker.git
 cd geopolitical-market-tracker
 
-# (Optional) Enable AI agent — copy .env.example and add your key
+# Copy .env.example and add your keys
 cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+# Edit .env and set:
+#   ANTHROPIC_API_KEY=sk-ant-...  (for AI agent)
+#   FRED_API_KEY=...              (for economic indicators, free at fred.stlouisfed.org)
 
 # Start all services (database, API, frontend)
 make up
@@ -143,6 +162,19 @@ make dev-frontend  # Terminal 2: React on localhost:3000
 | **Predictions** | | |
 | `/api/predictions/logistic` | POST | Logistic regression market direction prediction |
 | `/api/predictions/logistic/{symbol}/summary` | GET | Model fit statistics |
+| **Indicators** | | |
+| `/api/indicators/latest` | GET | Latest value + delta for each FRED series |
+| `/api/indicators/{series_id}` | GET | Time series for a single indicator |
+| **Headlines** | | |
+| `/api/headlines/recent` | GET | Recent news headlines, filterable by source |
+| **Prediction Markets** | | |
+| `/api/prediction-markets` | GET | All tracked Polymarket markets with latest odds |
+| `/api/prediction-markets/movers` | GET | Markets with biggest probability changes |
+| `/api/prediction-markets/{market_id}/history` | GET | Probability time series |
+| **Briefing** | | |
+| `/api/briefing/snapshot` | GET | Composite briefing data (indicators + movers + headlines + risk) |
+| **Risk** | | |
+| `/api/risk/heatmap` | GET | Country-level risk scoring with temporal trends |
 | **Analysis** | | |
 | `/api/analysis/results` | GET | Analysis results with filters |
 | `/api/analysis/significant` | GET | Statistically significant results |
@@ -201,16 +233,18 @@ geopolitical-market-tracker/
 │   │   ├── api/
 │   │   │   ├── main.py                 # FastAPI app + middleware
 │   │   │   ├── schemas.py              # Pydantic request/response models
-│   │   │   └── routes/                 # 7 routers (events, market, analysis,
-│   │   │                               #   correlation, patterns, predictions, agent)
+│   │   │   └── routes/                 # Routers (events, market, analysis,
+│   │   │                               #   correlation, patterns, predictions,
+│   │   │                               #   indicators, headlines, prediction_markets,
+│   │   │                               #   briefing, risk, agent)
 │   │   ├── db/                         # SQLAlchemy models + queries
 │   │   ├── config/                     # Settings, constants, symbol mappings
-│   │   └── ingestion/                  # GDELT + Yahoo Finance ETL
+│   │   └── ingestion/                  # GDELT, Yahoo Finance, RSS, FRED, Polymarket
 │   ├── tests/                          # pytest test suites
 │   ├── alembic/                        # Database migrations
 │   ├── scripts/                        # CLI utilities
 │   ├── flows/                          # Prefect pipeline flows
-│   │   ├── ingestion_flow.py           # Daily GDELT + Yahoo Finance ingestion
+│   │   ├── ingestion_flow.py           # Daily ingestion (5 sources)
 │   │   ├── analysis_flow.py            # Daily correlation + pattern computation
 │   │   ├── daily_pipeline.py           # Master flow (ingestion → analysis)
 │   │   └── deploy.py                   # Registers cron schedule
@@ -222,19 +256,20 @@ geopolitical-market-tracker/
 ├── frontend/                           # React app (Vite + Tailwind)
 │   └── src/
 │       ├── api/                        # Axios client + React Query hooks
-│       │                               #   (events, market, correlation, patterns,
-│       │                               #    predictions, agent)
 │       ├── components/
 │       │   ├── layout/                 # AppShell, Sidebar
-│       │   ├── charts/                 # PriceEventOverlay, Heatmap, Bar
+│       │   ├── charts/                 # PriceEventOverlay, Heatmap, Bar,
+│       │   │                           #   FusedTimeline, RiskRadar
 │       │   ├── cards/                  # MetricCard, PatternCard, PredictionCard
-│       │   └── shared/                 # SymbolSelector, DateRangePicker, Skeletons
-│       ├── pages/                      # Dashboard, Correlation, Timeline,
+│       │   └── shared/                 # SymbolSelector, DateRangePicker,
+│       │                               #   AnimatedNumber, Skeletons
+│       ├── pages/                      # IntelBriefing, PredictionMarkets,
+│       │                               #   Dashboard, Correlation, Timeline,
 │       │                               #   Map, Signals, AgentChat
-│       └── lib/                        # Constants, formatters
+│       └── lib/                        # Constants, formatters, animations
 │
 ├── .env.example                        # Environment variable template
-├── docker-compose.yml                  # 6 services: db, api, frontend, prefect, worker, migrate
+├── docker-compose.yml                  # Services: db, api, frontend, prefect, worker, migrate
 ├── Dockerfile.frontend                 # Multi-stage: Node build → nginx
 ├── nginx.conf                          # SPA routing + API proxy
 ├── Makefile                            # Dev and deployment commands
@@ -259,7 +294,7 @@ make dev-frontend    # Run React dev server
 # Data
 make ingest-events   # Ingest GDELT events (7 days)
 make ingest-market   # Ingest market data (30 days)
-make ingest-all      # Both
+make ingest-all      # All sources
 
 # Pipeline
 make pipeline        # Run daily pipeline manually
@@ -284,6 +319,17 @@ make setup           # Full setup
 | Volatility | ^VIX |
 | Bonds | TLT, IEF, HYG |
 
+## FRED Indicators (6)
+
+| Series | FRED ID | Frequency |
+|--------|---------|-----------|
+| Gross Domestic Product | GDP | Quarterly |
+| Consumer Price Index | CPIAUCSL | Monthly |
+| Unemployment Rate | UNRATE | Monthly |
+| Federal Funds Rate | DFF | Daily |
+| 10-Year Treasury Yield | DGS10 | Daily |
+| Consumer Sentiment (Michigan) | UMCSENT | Monthly |
+
 ## Docker Services
 
 | Service | Port | Description |
@@ -293,11 +339,6 @@ make setup           # Full setup
 | `frontend` | 3000 | React app via nginx |
 | `prefect-server` | 4200 | Prefect UI + orchestration API |
 | `prefect-worker` | — | Runs scheduled daily pipeline |
-
-## Data Sources
-
-- **[GDELT](https://www.gdeltproject.org/)**: Global Database of Events, Language, and Tone
-- **[Yahoo Finance](https://finance.yahoo.com/)**: Daily OHLCV data via yfinance
 
 ## License
 

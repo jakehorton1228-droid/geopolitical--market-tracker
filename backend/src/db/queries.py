@@ -14,7 +14,10 @@ from datetime import date, timedelta
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
-from src.db.models import Event, MarketData, AnalysisResult, EventMarketLink, NewsHeadline
+from src.db.models import (
+    Event, MarketData, AnalysisResult, EventMarketLink,
+    NewsHeadline, EconomicIndicator, PredictionMarket,
+)
 from src.config.constants import get_event_group
 
 
@@ -566,3 +569,213 @@ def get_latest_headline_date(session: Session, source: str | None = None) -> dat
     result = query.scalar()
     # published_at is DateTime, return just the date portion
     return result.date() if result else None
+
+
+# =============================================================================
+# ECONOMIC INDICATOR QUERIES
+# =============================================================================
+
+
+def upsert_economic_indicator(
+    session: Session, indicator_data: dict
+) -> EconomicIndicator | None:
+    """
+    Insert an economic indicator observation if it doesn't already exist.
+
+    Like headlines, FRED observations don't change after publication (revisions
+    get new dates), so we skip duplicates entirely.
+
+    Args:
+        session: Database session
+        indicator_data: Dict with series_id, series_name, date, value
+
+    Returns:
+        The new EconomicIndicator object, or None if it already existed
+    """
+    existing = session.query(EconomicIndicator).filter(
+        EconomicIndicator.series_id == indicator_data["series_id"],
+        EconomicIndicator.date == indicator_data["date"],
+    ).first()
+
+    if existing:
+        return None  # Already ingested, skip
+
+    indicator = EconomicIndicator(**indicator_data)
+    session.add(indicator)
+    return indicator
+
+
+def get_indicators_by_series(
+    session: Session,
+    series_id: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[EconomicIndicator]:
+    """
+    Fetch observations for a FRED series within an optional date range.
+
+    Args:
+        session: Database session
+        series_id: FRED series ID (e.g., "GDP", "UNRATE")
+        start_date: Start of range (inclusive)
+        end_date: End of range (inclusive)
+
+    Returns:
+        List of EconomicIndicator objects, oldest first
+    """
+    query = session.query(EconomicIndicator).filter(
+        EconomicIndicator.series_id == series_id
+    )
+
+    if start_date:
+        query = query.filter(EconomicIndicator.date >= start_date)
+    if end_date:
+        query = query.filter(EconomicIndicator.date <= end_date)
+
+    return query.order_by(EconomicIndicator.date).all()
+
+
+def get_latest_indicator_date(
+    session: Session, series_id: str
+) -> date | None:
+    """
+    Get the most recent observation date for a FRED series.
+
+    Used by the ingestion module to avoid re-fetching data we already have.
+
+    Args:
+        session: Database session
+        series_id: FRED series ID
+
+    Returns:
+        The date of the most recent observation, or None if no data exists
+    """
+    return session.query(func.max(EconomicIndicator.date)).filter(
+        EconomicIndicator.series_id == series_id
+    ).scalar()
+
+
+def get_all_latest_indicators(session: Session) -> list[EconomicIndicator]:
+    """
+    Get the most recent observation for each FRED series.
+
+    Useful for dashboard display — shows current values of all tracked indicators.
+
+    Returns:
+        List of EconomicIndicator objects (one per series)
+    """
+    # Subquery to find the max date per series
+    subquery = session.query(
+        EconomicIndicator.series_id,
+        func.max(EconomicIndicator.date).label("max_date"),
+    ).group_by(EconomicIndicator.series_id).subquery()
+
+    return session.query(EconomicIndicator).join(
+        subquery,
+        and_(
+            EconomicIndicator.series_id == subquery.c.series_id,
+            EconomicIndicator.date == subquery.c.max_date,
+        ),
+    ).all()
+
+
+# =============================================================================
+# PREDICTION MARKET QUERIES
+# =============================================================================
+
+
+def upsert_prediction_market(
+    session: Session, market_data: dict
+) -> PredictionMarket | None:
+    """
+    Insert a prediction market snapshot if we don't already have one for today.
+
+    We store one snapshot per market per day. If we already have today's snapshot,
+    we skip it (probabilities within a single day are close enough).
+
+    Args:
+        session: Database session
+        market_data: Dict with market_id, question, yes_price, snapshot_at, etc.
+
+    Returns:
+        The new PredictionMarket object, or None if today's snapshot exists
+    """
+    snapshot_date = market_data["snapshot_at"].date()
+
+    existing = session.query(PredictionMarket).filter(
+        PredictionMarket.market_id == market_data["market_id"],
+        PredictionMarket.snapshot_date == snapshot_date,
+    ).first()
+
+    if existing:
+        return None  # Already have today's snapshot
+
+    market_data["snapshot_date"] = snapshot_date
+    market = PredictionMarket(**market_data)
+    session.add(market)
+    return market
+
+
+def get_market_snapshots(
+    session: Session,
+    market_id: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[PredictionMarket]:
+    """
+    Fetch daily snapshots for a specific prediction market.
+
+    Returns the probability time series for a market, useful for
+    plotting how crowd sentiment shifts over time.
+
+    Args:
+        session: Database session
+        market_id: Polymarket's market ID
+        start_date: Start of range (inclusive)
+        end_date: End of range (inclusive)
+
+    Returns:
+        List of PredictionMarket objects, oldest first
+    """
+    query = session.query(PredictionMarket).filter(
+        PredictionMarket.market_id == market_id
+    )
+
+    if start_date:
+        query = query.filter(PredictionMarket.snapshot_date >= start_date)
+    if end_date:
+        query = query.filter(PredictionMarket.snapshot_date <= end_date)
+
+    return query.order_by(PredictionMarket.snapshot_date).all()
+
+
+def get_latest_predictions(
+    session: Session, limit: int = 50
+) -> list[PredictionMarket]:
+    """
+    Get the most recent snapshot for each tracked market.
+
+    Useful for dashboard display — shows current probabilities for
+    all geopolitical prediction markets.
+
+    Args:
+        session: Database session
+        limit: Maximum number of markets to return
+
+    Returns:
+        List of PredictionMarket objects (one per market), sorted by volume
+    """
+    subquery = session.query(
+        PredictionMarket.market_id,
+        func.max(PredictionMarket.snapshot_date).label("max_date"),
+    ).group_by(PredictionMarket.market_id).subquery()
+
+    return session.query(PredictionMarket).join(
+        subquery,
+        and_(
+            PredictionMarket.market_id == subquery.c.market_id,
+            PredictionMarket.snapshot_date == subquery.c.max_date,
+        ),
+    ).order_by(
+        PredictionMarket.volume_24h.desc()
+    ).limit(limit).all()
