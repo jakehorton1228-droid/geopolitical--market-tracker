@@ -32,6 +32,9 @@ from src.api.routes import (
     patterns_router,
     predictions_router,
     agent_router,
+    indicators_router,
+    headlines_router,
+    prediction_markets_router,
 )
 from src.api.schemas import HealthResponse, ErrorResponse
 from src.db.connection import get_session
@@ -151,6 +154,9 @@ app.include_router(correlation_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
 app.include_router(predictions_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
+app.include_router(indicators_router, prefix="/api")
+app.include_router(headlines_router, prefix="/api")
+app.include_router(prediction_markets_router, prefix="/api")
 
 
 # =============================================================================
@@ -176,6 +182,9 @@ def root():
             "correlation": "/api/correlation",
             "patterns": "/api/patterns",
             "predictions": "/api/predictions",
+            "indicators": "/api/indicators",
+            "headlines": "/api/headlines",
+            "prediction_markets": "/api/prediction-markets",
             "agent": "/api/agent/chat",
             "health": "/health",
         },

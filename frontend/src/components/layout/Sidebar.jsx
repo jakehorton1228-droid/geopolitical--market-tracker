@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '⊞' },
+  { to: '/markets', label: 'Predictions', icon: '◎' },
   { to: '/correlation', label: 'Correlations', icon: '⊘' },
   { to: '/timeline', label: 'Timeline', icon: '⊟' },
   { to: '/map', label: 'World Map', icon: '⊕' },
@@ -42,7 +43,7 @@ export default function Sidebar() {
 
       <div className="p-3 border-t border-border">
         <p className="text-[10px] text-text-secondary text-center">
-          Data: GDELT + Yahoo Finance
+          GDELT + Yahoo + RSS + FRED + Polymarket
         </p>
       </div>
     </aside>

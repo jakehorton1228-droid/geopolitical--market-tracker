@@ -17,8 +17,8 @@ import DateRangePicker from '../components/shared/DateRangePicker'
 import CorrelationHeatmap from '../components/charts/CorrelationHeatmap'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useCorrelations, useRollingCorrelation, useCorrelationHeatmap } from '../api/correlation'
-import { correlationColor, formatCorrelation } from '../lib/formatters'
-import { COLORS, DEFAULT_SYMBOLS } from '../lib/constants'
+import { correlationColor, formatCorrelation } from '../utils/formatters'
+import { COLORS, DEFAULT_SYMBOLS } from '../utils/constants'
 
 function daysAgo(n) {
   const d = new Date()

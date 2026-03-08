@@ -1,6 +1,6 @@
 /** Dropdown selector for tracked financial symbols, grouped by category. */
 import { useSymbols } from '../../api/market'
-import { DEFAULT_SYMBOLS } from '../../lib/constants'
+import { DEFAULT_SYMBOLS } from '../../utils/constants'
 
 export default function SymbolSelector({ value, onChange }) {
   const { data: symbols } = useSymbols()

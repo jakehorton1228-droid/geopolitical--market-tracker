@@ -1,4 +1,4 @@
-import { signalColor } from '../../lib/formatters'
+import { signalColor } from '../../utils/formatters'
 
 function confidenceLabel(prob) {
   const p = Math.max(prob, 1 - prob) // distance from 0.5

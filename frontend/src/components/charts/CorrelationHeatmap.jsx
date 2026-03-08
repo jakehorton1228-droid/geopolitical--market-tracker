@@ -1,5 +1,5 @@
 /** Color-coded heatmap grid: symbols (rows) x event metrics (columns) with correlation values. */
-import { correlationColor, formatCorrelation } from '../../lib/formatters'
+import { correlationColor, formatCorrelation } from '../../utils/formatters'
 
 export default function CorrelationHeatmap({ data }) {
   const { symbols, event_metrics, matrix } = data

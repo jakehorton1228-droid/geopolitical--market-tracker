@@ -779,3 +779,142 @@ def get_latest_predictions(
     ).order_by(
         PredictionMarket.volume_24h.desc()
     ).limit(limit).all()
+
+
+def get_prediction_movers(
+    session: Session, days_back: int = 7, limit: int = 10
+) -> list[dict]:
+    """
+    Find prediction markets with the biggest probability changes.
+
+    Compares each market's latest snapshot to its snapshot N days ago.
+    Returns markets sorted by absolute price change — the "biggest movers."
+
+    Args:
+        session: Database session
+        days_back: Compare to snapshot this many days ago
+        limit: Maximum number of movers to return
+
+    Returns:
+        List of dicts with current_price, previous_price, price_change, etc.
+    """
+    from datetime import timedelta
+
+    # Get the latest snapshot date
+    latest_date = session.query(
+        func.max(PredictionMarket.snapshot_date)
+    ).scalar()
+
+    if not latest_date:
+        return []
+
+    comparison_date = latest_date - timedelta(days=days_back)
+
+    # Get latest snapshots
+    latest_sub = session.query(
+        PredictionMarket.market_id,
+        func.max(PredictionMarket.snapshot_date).label("max_date"),
+    ).filter(
+        PredictionMarket.snapshot_date == latest_date
+    ).group_by(PredictionMarket.market_id).subquery()
+
+    # Get comparison snapshots (closest to comparison_date)
+    comparison_sub = session.query(
+        PredictionMarket.market_id,
+        func.max(PredictionMarket.snapshot_date).label("comp_date"),
+    ).filter(
+        PredictionMarket.snapshot_date <= comparison_date
+    ).group_by(PredictionMarket.market_id).subquery()
+
+    # Get latest market data
+    latest_markets = session.query(PredictionMarket).join(
+        latest_sub,
+        and_(
+            PredictionMarket.market_id == latest_sub.c.market_id,
+            PredictionMarket.snapshot_date == latest_sub.c.max_date,
+        ),
+    ).all()
+
+    # Get comparison prices as a dict
+    comp_rows = session.query(PredictionMarket).join(
+        comparison_sub,
+        and_(
+            PredictionMarket.market_id == comparison_sub.c.market_id,
+            PredictionMarket.snapshot_date == comparison_sub.c.comp_date,
+        ),
+    ).all()
+    comp_prices = {m.market_id: (m.yes_price, m.snapshot_date) for m in comp_rows}
+
+    # Build movers list
+    movers = []
+    for m in latest_markets:
+        if m.market_id in comp_prices:
+            prev_price, prev_date = comp_prices[m.market_id]
+            change = m.yes_price - prev_price
+            movers.append({
+                "market_id": m.market_id,
+                "question": m.question,
+                "event_title": m.event_title,
+                "current_price": m.yes_price,
+                "previous_price": prev_price,
+                "price_change": change,
+                "abs_change": abs(change),
+                "snapshot_date": m.snapshot_date,
+                "previous_date": prev_date,
+            })
+
+    # Sort by absolute change, descending
+    movers.sort(key=lambda x: x["abs_change"], reverse=True)
+    return movers[:limit]
+
+
+def get_indicators_with_deltas(session: Session) -> list[dict]:
+    """
+    Get the latest observation for each FRED series, plus the previous
+    observation for computing deltas.
+
+    Returns a list of dicts with: series_id, series_name, date, value,
+    previous_value, previous_date, change, change_pct.
+    """
+    from sqlalchemy import desc
+
+    results = []
+    # Get distinct series IDs
+    series_ids = session.query(
+        EconomicIndicator.series_id
+    ).distinct().all()
+
+    for (series_id,) in series_ids:
+        # Get the two most recent observations
+        recent = session.query(EconomicIndicator).filter(
+            EconomicIndicator.series_id == series_id
+        ).order_by(desc(EconomicIndicator.date)).limit(2).all()
+
+        if not recent:
+            continue
+
+        latest = recent[0]
+        entry = {
+            "series_id": latest.series_id,
+            "series_name": latest.series_name,
+            "date": latest.date,
+            "value": latest.value,
+            "previous_value": None,
+            "previous_date": None,
+            "change": None,
+            "change_pct": None,
+        }
+
+        if len(recent) > 1:
+            prev = recent[1]
+            entry["previous_value"] = prev.value
+            entry["previous_date"] = prev.date
+            entry["change"] = latest.value - prev.value
+            if prev.value != 0:
+                entry["change_pct"] = (
+                    (latest.value - prev.value) / prev.value
+                ) * 100
+
+        results.append(entry)
+
+    return results

@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts'
-import { COLORS } from '../../lib/constants'
+import { COLORS } from '../../utils/constants'
 
 export default function TopCorrelationsBar({ data }) {
   const chartData = data.map((d) => ({

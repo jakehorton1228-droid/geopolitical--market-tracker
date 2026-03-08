@@ -15,7 +15,7 @@ import DateRangePicker from '../components/shared/DateRangePicker'
 import PriceEventOverlay from '../components/charts/PriceEventOverlay'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useMarketWithEvents } from '../api/market'
-import { EVENT_GROUP_CONFIG } from '../lib/constants'
+import { EVENT_GROUP_CONFIG } from '../utils/constants'
 
 function daysAgo(n) {
   const d = new Date()

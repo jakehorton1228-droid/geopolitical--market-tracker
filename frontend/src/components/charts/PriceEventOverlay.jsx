@@ -3,7 +3,7 @@ import {
   ComposedChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { COLORS } from '../../lib/constants'
+import { COLORS } from '../../utils/constants'
 
 function eventColor(row) {
   if ((row.conflict_count ?? 0) > (row.cooperation_count ?? 0)) return COLORS.red

@@ -14,7 +14,7 @@ import {
 import DateRangePicker from '../components/shared/DateRangePicker'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useEventsMap } from '../api/events'
-import { COLORS, ISO_NUM_TO_A3 } from '../lib/constants'
+import { COLORS, ISO_NUM_TO_A3 } from '../utils/constants'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 

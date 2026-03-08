@@ -6,12 +6,14 @@ import EventTimeline from './pages/EventTimeline'
 import WorldMapView from './pages/WorldMapView'
 import Signals from './pages/Signals'
 import AgentChat from './pages/AgentChat'
+import PredictionMarkets from './pages/PredictionMarkets'
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/markets" element={<PredictionMarkets />} />
         <Route path="/correlation" element={<CorrelationExplorer />} />
         <Route path="/timeline" element={<EventTimeline />} />
         <Route path="/map" element={<WorldMapView />} />

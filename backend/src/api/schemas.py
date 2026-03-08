@@ -364,3 +364,80 @@ class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None
     status_code: int
+
+
+# =============================================================================
+# ECONOMIC INDICATOR SCHEMAS
+# =============================================================================
+
+class IndicatorResponse(BaseModel):
+    """Single FRED indicator observation."""
+    series_id: str
+    series_name: str
+    date: date
+    value: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IndicatorWithDeltaResponse(BaseModel):
+    """Latest FRED indicator with change from previous observation."""
+    series_id: str
+    series_name: str
+    date: date
+    value: float
+    previous_value: float | None = None
+    previous_date: date | None = None
+    change: float | None = None
+    change_pct: float | None = None
+
+
+# =============================================================================
+# NEWS HEADLINE SCHEMAS
+# =============================================================================
+
+class HeadlineResponse(BaseModel):
+    """News headline from RSS feeds."""
+    id: int
+    source: str
+    headline: str
+    url: str
+    description: str | None = None
+    published_at: datetime
+    sentiment_score: float | None = None
+    sentiment_label: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# PREDICTION MARKET SCHEMAS
+# =============================================================================
+
+class PredictionMarketResponse(BaseModel):
+    """Prediction market snapshot from Polymarket."""
+    id: int
+    market_id: str
+    question: str
+    event_title: str | None = None
+    yes_price: float
+    volume_24h: float | None = None
+    total_volume: float | None = None
+    liquidity: float | None = None
+    end_date: str | None = None
+    snapshot_date: date
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PredictionMoverResponse(BaseModel):
+    """Prediction market with probability change over a time window."""
+    market_id: str
+    question: str
+    event_title: str | None = None
+    current_price: float
+    previous_price: float
+    price_change: float
+    abs_change: float
+    snapshot_date: date
+    previous_date: date

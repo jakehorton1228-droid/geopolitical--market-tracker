@@ -1,4 +1,4 @@
-import { formatPercent } from '../../lib/formatters'
+import { formatPercent } from '../../utils/formatters'
 
 function biasLabel(upPct) {
   if (upPct >= 60) return { text: 'Bullish bias', cls: 'text-accent-green' }
