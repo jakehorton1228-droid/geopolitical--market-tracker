@@ -35,6 +35,7 @@ from src.api.routes import (
     indicators_router,
     headlines_router,
     prediction_markets_router,
+    briefing_router,
 )
 from src.api.schemas import HealthResponse, ErrorResponse
 from src.db.connection import get_session
@@ -157,6 +158,7 @@ app.include_router(agent_router, prefix="/api")
 app.include_router(indicators_router, prefix="/api")
 app.include_router(headlines_router, prefix="/api")
 app.include_router(prediction_markets_router, prefix="/api")
+app.include_router(briefing_router, prefix="/api")
 
 
 # =============================================================================

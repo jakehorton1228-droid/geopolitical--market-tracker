@@ -31,6 +31,8 @@ from src.analysis.historical_patterns import HistoricalPatternAnalyzer
 from src.analysis.production_regression import LogisticRegressionAnalyzer
 from src.analysis.production_anomaly import ProductionAnomalyDetector
 from src.analysis.embeddings import EmbeddingGenerator
+from src.rag.retriever import Retriever
+from src.rag.context import ContextBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -372,6 +374,35 @@ TOOL_DEFINITIONS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "rag_search",
+        "description": (
+            "RAG (Retrieval-Augmented Generation) search. Given a question or topic, "
+            "retrieves the most relevant headlines AND events from the database using "
+            "semantic similarity, and returns them as structured context. Use this for "
+            "broad research questions or when you need comprehensive background on a topic. "
+            "Unlike search_similar_content which searches one type, this searches both "
+            "headlines and events and formats them as an intelligence briefing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language question or topic (e.g., 'What is driving oil prices?', 'Iran nuclear tensions').",
+                },
+                "days_back": {
+                    "type": "integer",
+                    "description": "How many days back to search. Default 30.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max total documents to retrieve. Default 15.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -436,6 +467,8 @@ def _dispatch(tool_name: str, inp: dict) -> dict | list:
         return _exec_get_sentiment_summary(inp)
     elif tool_name == "search_similar_content":
         return _exec_search_similar_content(inp)
+    elif tool_name == "rag_search":
+        return _exec_rag_search(inp)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -876,3 +909,25 @@ def _exec_search_similar_content(inp: dict) -> list[dict]:
                 }
                 for r in results
             ]
+
+
+def _exec_rag_search(inp: dict) -> dict:
+    query_text = inp["query"]
+    days_back = inp.get("days_back", 30)
+    limit = inp.get("limit", 15)
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days_back)
+
+    builder = ContextBuilder()
+    context = builder.build(
+        query_text,
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    if not context:
+        return {"context": "", "message": "No relevant content found for this query."}
+
+    return {"context": context}

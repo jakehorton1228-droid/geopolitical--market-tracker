@@ -1,12 +1,13 @@
 /**
  * Intelligence Briefing — flagship dashboard fusing all 5 data sources.
  *
- * 5-Panel Layout:
+ * 6-Panel Layout:
  * 1. FRED Macro Strip — Economic indicators with animated counters
  * 2. Prediction Market Movers — Biggest probability changes (24h)
  * 3. Fused Event/Price Timeline — Events overlaid on price chart
  * 4. News Headlines — Recent headlines from RSS feeds
  * 5. Risk Radar — Countries with highest event intensity
+ * 6. AI Summary — RAG-powered situational awareness briefing
  */
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
@@ -27,6 +28,7 @@ import { usePredictionMovers, usePredictionMarkets } from '../api/predictionMark
 import { useRecentHeadlines } from '../api/headlines'
 import { useEventsByCountry } from '../api/events'
 import { useMarketWithEvents } from '../api/market'
+import { useBriefingSummary } from '../api/briefing'
 import { fadeInUp, staggerContainer, staggerItem } from '../utils/animations'
 
 function daysAgo(n) {
@@ -95,6 +97,7 @@ export default function IntelligenceBriefing() {
   const { data: allMarkets, isLoading: marketsLoading } = usePredictionMarkets(8)
   const { data: headlines, isLoading: headlinesLoading } = useRecentHeadlines(null, 3, 10)
   const { data: countryEvents, isLoading: countryLoading } = useEventsByCountry(range.start, range.end)
+  const { data: briefingSummary, isLoading: summaryLoading } = useBriefingSummary(3)
   const { data: priceEvents, isLoading: priceLoading } = useMarketWithEvents(
     selectedSymbol,
     range.start,
@@ -464,6 +467,42 @@ export default function IntelligenceBriefing() {
           ) : (
             <p className="text-text-secondary text-sm text-center py-4">
               No event data available.
+            </p>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Panel 6: AI Summary */}
+      <motion.div {...fadeInUp} transition={{ delay: 0.6 }}>
+        <div className="glass-panel p-4 border-gradient-top">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="section-label">
+              AI Situational Summary
+            </h3>
+            {briefingSummary?.source === 'ai_generated' && (
+              <span className="text-[10px] font-mono text-accent-cyan">
+                powered by RAG
+              </span>
+            )}
+          </div>
+          {summaryLoading ? (
+            <div className="space-y-2 animate-pulse">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-4 bg-bg-tertiary rounded" style={{ width: `${90 - i * 10}%` }} />
+              ))}
+            </div>
+          ) : briefingSummary?.summary ? (
+            <div className="text-sm text-text-secondary leading-relaxed whitespace-pre-line">
+              {briefingSummary.summary}
+            </div>
+          ) : (
+            <p className="text-text-secondary text-sm text-center py-4">
+              No briefing data available. Run the ingestion pipeline to populate data.
+            </p>
+          )}
+          {briefingSummary?.note && (
+            <p className="text-[10px] text-text-secondary mt-3 opacity-60">
+              {briefingSummary.note}
             </p>
           )}
         </div>

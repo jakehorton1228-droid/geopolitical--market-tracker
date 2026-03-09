@@ -9,6 +9,9 @@ window for market data (covers weekends/holidays). RSS feeds
 are fetched in full each run — deduplication happens at the DB level.
 FRED series are fetched with a 90-day window to catch revisions and
 backfill any gaps.
+
+After ingestion, new headlines and events are automatically embedded
+and sentiment-scored so they're immediately available for RAG search.
 """
 
 from datetime import date, timedelta
@@ -19,6 +22,8 @@ from src.ingestion.market_data import MarketDataIngestion
 from src.ingestion.rss_feeds import RSSIngestion
 from src.ingestion.fred import FREDIngestion
 from src.ingestion.polymarket import PolymarketIngestion
+from src.analysis.sentiment import score_unprocessed_headlines
+from src.analysis.embeddings import embed_unprocessed_headlines, embed_unprocessed_events
 
 
 @task(name="ingest-events", retries=3, retry_delay_seconds=60, log_prints=True)
@@ -120,9 +125,49 @@ def ingest_polymarket() -> dict:
     return {"snapshots_ingested": count}
 
 
+@task(name="post-ingest-nlp", retries=1, retry_delay_seconds=30, log_prints=True)
+def post_ingest_nlp() -> dict:
+    """
+    Score sentiment and generate embeddings for newly ingested content.
+
+    Runs immediately after ingestion so new headlines/events are
+    searchable via RAG without waiting for the full analysis pipeline.
+    Only processes rows with NULL sentiment_score or NULL embedding,
+    so it's fast when there's little new content.
+    """
+    logger = get_run_logger()
+    logger.info("Running post-ingestion NLP (sentiment + embeddings)")
+
+    from src.db.connection import get_session
+
+    try:
+        with get_session() as session:
+            n_scored = score_unprocessed_headlines(session)
+        logger.info(f"Scored {n_scored} headlines")
+    except Exception as e:
+        logger.warning(f"Sentiment scoring failed: {e}")
+        n_scored = 0
+
+    try:
+        with get_session() as session:
+            n_headlines = embed_unprocessed_headlines(session)
+        with get_session() as session:
+            n_events = embed_unprocessed_events(session)
+        logger.info(f"Embedded {n_headlines} headlines, {n_events} events")
+    except Exception as e:
+        logger.warning(f"Embedding generation failed: {e}")
+        n_headlines, n_events = 0, 0
+
+    return {
+        "headlines_scored": n_scored,
+        "headlines_embedded": n_headlines,
+        "events_embedded": n_events,
+    }
+
+
 @flow(name="daily-ingestion", retries=2, retry_delay_seconds=300, log_prints=True)
 def daily_ingestion() -> dict:
-    """Run daily data ingestion: events + market data + RSS + FRED + Polymarket."""
+    """Run daily data ingestion: events + market data + RSS + FRED + Polymarket, then NLP."""
     logger = get_run_logger()
     logger.info("Starting daily ingestion pipeline")
 
@@ -132,6 +177,9 @@ def daily_ingestion() -> dict:
     fred_result = ingest_fred()
     polymarket_result = ingest_polymarket()
 
+    # Immediately process new content for RAG availability
+    nlp_result = post_ingest_nlp()
+
     logger.info("Daily ingestion complete")
     return {
         "events": events_result,
@@ -139,6 +187,7 @@ def daily_ingestion() -> dict:
         "rss": rss_result,
         "fred": fred_result,
         "polymarket": polymarket_result,
+        "nlp": nlp_result,
     }
 
 

@@ -10,6 +10,7 @@ from src.api.routes.agent import router as agent_router
 from src.api.routes.indicators import router as indicators_router
 from src.api.routes.headlines import router as headlines_router
 from src.api.routes.prediction_markets import router as prediction_markets_router
+from src.api.routes.briefing import router as briefing_router
 
 __all__ = [
     "events_router",
@@ -22,4 +23,5 @@ __all__ = [
     "indicators_router",
     "headlines_router",
     "prediction_markets_router",
+    "briefing_router",
 ]
