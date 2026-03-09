@@ -23,7 +23,7 @@ import AnimatedNumber from '../components/shared/AnimatedNumber'
 import SkeletonCard from '../components/shared/SkeletonCard'
 import SkeletonChart from '../components/shared/SkeletonChart'
 import { useLatestIndicators } from '../api/indicators'
-import { usePredictionMovers } from '../api/predictionMarkets'
+import { usePredictionMovers, usePredictionMarkets } from '../api/predictionMarkets'
 import { useRecentHeadlines } from '../api/headlines'
 import { useEventsByCountry } from '../api/events'
 import { useMarketWithEvents } from '../api/market'
@@ -69,6 +69,7 @@ export default function IntelligenceBriefing() {
   // Data hooks
   const { data: indicators, isLoading: indicatorsLoading } = useLatestIndicators()
   const { data: movers, isLoading: moversLoading } = usePredictionMovers(1, 8)
+  const { data: allMarkets, isLoading: marketsLoading } = usePredictionMarkets(8)
   const { data: headlines, isLoading: headlinesLoading } = useRecentHeadlines(null, 3, 10)
   const { data: countryEvents, isLoading: countryLoading } = useEventsByCountry(range.start, range.end)
   const { data: priceEvents, isLoading: priceLoading } = useMarketWithEvents(
@@ -85,14 +86,14 @@ export default function IntelligenceBriefing() {
       .slice(0, 8)
   }, [countryEvents])
 
-  // Fused timeline data
+  // Fused timeline data - API returns flat array with price + event data per day
   const chartData = useMemo(() => {
-    if (!priceEvents?.prices) return []
-    return priceEvents.prices.map((p) => ({
+    if (!priceEvents || !Array.isArray(priceEvents) || priceEvents.length === 0) return []
+    return priceEvents.map((p) => ({
       date: p.date,
       price: p.close,
-      hasEvent: priceEvents.events?.some((e) => e.event_date === p.date),
-      eventCount: priceEvents.events?.filter((e) => e.event_date === p.date).length || 0,
+      hasEvent: (p.event_count ?? 0) > 0,
+      eventCount: p.event_count ?? 0,
     }))
   }, [priceEvents])
 
@@ -170,13 +171,13 @@ export default function IntelligenceBriefing() {
 
       {/* Two-column layout for middle panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Panel 2: Prediction Market Movers */}
+        {/* Panel 2: Prediction Markets (movers if available, otherwise top by volume) */}
         <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
           <div className="bg-bg-secondary border border-border rounded-xl p-4 h-full">
             <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
-              Prediction Market Movers (24h)
+              {movers?.length > 0 ? 'Prediction Market Movers (24h)' : 'Top Prediction Markets'}
             </h3>
-            {moversLoading ? (
+            {(moversLoading || marketsLoading) ? (
               <div className="space-y-2 animate-pulse">
                 {[...Array(5)].map((_, i) => (
                   <div key={i} className="flex items-center gap-3">
@@ -220,6 +221,35 @@ export default function IntelligenceBriefing() {
                   )
                 })}
               </motion.div>
+            ) : allMarkets?.length > 0 ? (
+              <motion.div
+                className="space-y-2"
+                variants={staggerContainer.variants}
+                initial="initial"
+                animate="animate"
+              >
+                {allMarkets.map((m, i) => (
+                  <motion.div
+                    key={m.market_id || i}
+                    variants={staggerItem.variants}
+                    className="flex items-center gap-3 bg-bg-tertiary rounded-lg px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-text-primary truncate">
+                        {m.question || m.event_title}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-mono text-text-primary">
+                        {((m.yes_price ?? 0) * 100).toFixed(0)}%
+                      </span>
+                      <span className="text-[10px] text-text-secondary">
+                        ${(m.volume_24h / 1000).toFixed(0)}k vol
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
             ) : (
               <p className="text-text-secondary text-sm text-center py-4">
                 No prediction market data available.
@@ -257,7 +287,7 @@ export default function IntelligenceBriefing() {
                       {h.source}
                     </span>
                     <p className={`text-sm ${headlineSentiment()} leading-tight`}>
-                      {h.title}
+                      {h.headline}
                     </p>
                   </motion.div>
                 ))}
