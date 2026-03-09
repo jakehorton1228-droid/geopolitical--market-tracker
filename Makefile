@@ -176,7 +176,50 @@ m.ingest_all_symbols(date.today() - timedelta(days=30), date.today()); \
 "
 	@echo "$(GREEN)Market data ingestion complete.$(NC)"
 
-ingest-all: ingest-events ingest-market ## Ingest both events and market data
+ingest-headlines: ## Ingest RSS headlines (last 3 days)
+	@echo "$(BLUE)Ingesting RSS headlines...$(NC)"
+	$(ACTIVATE) python -c "\
+from src.ingestion.rss_feeds import RSSIngestion; \
+r = RSSIngestion(); \
+r.ingest_all_feeds(); \
+"
+	@echo "$(GREEN)Headlines ingestion complete.$(NC)"
+
+ingest-fred: ## Ingest FRED economic indicators
+	@echo "$(BLUE)Ingesting FRED indicators...$(NC)"
+	$(ACTIVATE) python -c "\
+from src.ingestion.fred import FREDIngestion; \
+f = FREDIngestion(); \
+f.ingest_all_series(); \
+"
+	@echo "$(GREEN)FRED ingestion complete.$(NC)"
+
+ingest-polymarket: ## Ingest Polymarket prediction markets
+	@echo "$(BLUE)Ingesting Polymarket data...$(NC)"
+	$(ACTIVATE) python -c "\
+from src.ingestion.polymarket import PolymarketIngestion; \
+p = PolymarketIngestion(); \
+p.ingest_markets(); \
+"
+	@echo "$(GREEN)Polymarket ingestion complete.$(NC)"
+
+ingest-all: ingest-events ingest-market ingest-headlines ingest-fred ingest-polymarket ## Ingest all 5 data sources
+
+ingest-history: ## Ingest 1 year of historical data (events + market)
+	@echo "$(BLUE)Ingesting 1 year of historical data...$(NC)"
+	@echo "$(YELLOW)This may take 10-20 minutes...$(NC)"
+	$(ACTIVATE) python -c "\
+from datetime import date, timedelta; \
+from src.ingestion.gdelt import GDELTIngestion; \
+from src.ingestion.market_data import MarketDataIngestion; \
+print('Ingesting GDELT events (1 year)...'); \
+g = GDELTIngestion(); \
+g.ingest_date_range(date.today() - timedelta(days=365), date.today() - timedelta(days=1)); \
+print('Ingesting market data (1 year)...'); \
+m = MarketDataIngestion(); \
+m.ingest_all_symbols(date.today() - timedelta(days=365), date.today(), skip_existing=False); \
+"
+	@echo "$(GREEN)Historical data ingestion complete.$(NC)"
 
 # ============================================================================
 # PREFECT PIPELINE

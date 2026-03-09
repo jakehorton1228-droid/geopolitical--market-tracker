@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import Dashboard from './pages/Dashboard'
+import IntelligenceBriefing from './pages/IntelligenceBriefing'
 import CorrelationExplorer from './pages/CorrelationExplorer'
 import EventTimeline from './pages/EventTimeline'
 import WorldMapView from './pages/WorldMapView'
@@ -13,6 +14,7 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/briefing" element={<IntelligenceBriefing />} />
         <Route path="/markets" element={<PredictionMarkets />} />
         <Route path="/correlation" element={<CorrelationExplorer />} />
         <Route path="/timeline" element={<EventTimeline />} />
