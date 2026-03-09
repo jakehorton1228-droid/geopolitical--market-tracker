@@ -59,7 +59,7 @@ export default function EventTimeline() {
         ) : data && data.length > 0 ? (
           <PriceEventOverlay data={data} symbol={symbol} />
         ) : (
-          <div className="bg-bg-secondary border border-border rounded-xl p-8 text-center text-text-secondary">
+          <div className="glass-panel p-8 text-center text-text-secondary">
             No data available for {symbol}. Try ingesting data first.
           </div>
         )}
@@ -67,8 +67,8 @@ export default function EventTimeline() {
 
       {eventDays.length > 0 && (
         <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }}>
-          <div className="bg-bg-secondary border border-border rounded-xl p-4">
-            <h3 className="text-sm font-medium text-text-primary mb-3">
+          <div className="glass-panel p-4 border-gradient-top">
+            <h3 className="section-label mb-3">
               Event Days ({eventDays.length})
             </h3>
             <div className="overflow-x-auto">

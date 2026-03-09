@@ -29,7 +29,7 @@ export default function DateRangePicker({ startDate, endDate, onStartChange, onE
               onStartChange(daysAgo(days))
               onEndChange(today())
             }}
-            className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+            className="px-2 py-1 text-xs rounded bg-glass border border-transparent text-text-secondary hover:text-text-primary hover:border-glass-border backdrop-blur-sm transition-all"
           >
             {label}
           </button>
@@ -39,14 +39,14 @@ export default function DateRangePicker({ startDate, endDate, onStartChange, onE
         type="date"
         value={startDate}
         onChange={(e) => onStartChange(e.target.value)}
-        className="bg-bg-tertiary border border-border rounded px-2 py-1 text-xs text-text-primary"
+        className="bg-glass border border-glass-border rounded px-2 py-1 text-xs text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 transition-all"
       />
       <span className="text-text-secondary text-xs">to</span>
       <input
         type="date"
         value={endDate}
         onChange={(e) => onEndChange(e.target.value)}
-        className="bg-bg-tertiary border border-border rounded px-2 py-1 text-xs text-text-primary"
+        className="bg-glass border border-glass-border rounded px-2 py-1 text-xs text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 transition-all"
       />
     </div>
   )

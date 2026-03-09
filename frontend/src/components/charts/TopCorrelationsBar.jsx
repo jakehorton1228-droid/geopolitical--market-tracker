@@ -12,8 +12,8 @@ export default function TopCorrelationsBar({ data }) {
   }))
 
   return (
-    <div className="bg-bg-secondary border border-border rounded-xl p-4">
-      <h3 className="text-sm font-medium text-text-primary mb-3">
+    <div className="glass-panel p-4 border-gradient-top">
+      <h3 className="section-label mb-3">
         Strongest Event-Market Correlations
       </h3>
       <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28)}>

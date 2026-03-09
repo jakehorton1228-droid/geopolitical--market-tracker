@@ -30,6 +30,7 @@ from src.analysis.correlation import CorrelationAnalyzer
 from src.analysis.historical_patterns import HistoricalPatternAnalyzer
 from src.analysis.production_regression import LogisticRegressionAnalyzer
 from src.analysis.production_anomaly import ProductionAnomalyDetector
+from src.analysis.embeddings import EmbeddingGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +281,97 @@ TOOL_DEFINITIONS = [
             "required": [],
         },
     },
+    {
+        "name": "get_headline_sentiment",
+        "description": (
+            "Get recent news headlines with their FinBERT sentiment scores. "
+            "Each headline has a score (-1.0 negative to +1.0 positive) and label. "
+            "Use this to gauge media sentiment about a topic or region."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date (YYYY-MM-DD). Defaults to 7 days ago.",
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date (YYYY-MM-DD). Defaults to today.",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["reuters", "ap", "bbc", "aljazeera"],
+                    "description": "Filter by news source.",
+                },
+                "sentiment": {
+                    "type": "string",
+                    "enum": ["positive", "negative", "neutral"],
+                    "description": "Filter by sentiment label.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max headlines to return. Default 20.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_sentiment_summary",
+        "description": (
+            "Get aggregate sentiment statistics for news headlines over a time period. "
+            "Returns average score, distribution (positive/negative/neutral counts), "
+            "and daily trend. Use this to understand overall media mood."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date (YYYY-MM-DD). Defaults to 7 days ago.",
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date (YYYY-MM-DD). Defaults to today.",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["reuters", "ap", "bbc", "aljazeera"],
+                    "description": "Filter by news source.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "search_similar_content",
+        "description": (
+            "Semantic search using embeddings. Given a natural language query, finds "
+            "the most similar headlines or events by meaning (not just keyword match). "
+            "Example: 'nuclear escalation' finds headlines about atomic weapons, "
+            "missile threats, etc. even without those exact words."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query (e.g., 'oil supply disruption', 'China Taiwan tensions').",
+                },
+                "content_type": {
+                    "type": "string",
+                    "enum": ["headlines", "events"],
+                    "description": "Search headlines or events. Default: headlines.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return. Default 10.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -338,6 +430,12 @@ def _dispatch(tool_name: str, inp: dict) -> dict | list:
         return _exec_list_symbols(inp)
     elif tool_name == "get_symbol_countries":
         return _exec_get_symbol_countries(inp)
+    elif tool_name == "get_headline_sentiment":
+        return _exec_get_headline_sentiment(inp)
+    elif tool_name == "get_sentiment_summary":
+        return _exec_get_sentiment_summary(inp)
+    elif tool_name == "search_similar_content":
+        return _exec_search_similar_content(inp)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -606,3 +704,175 @@ def _exec_get_symbol_countries(inp: dict) -> dict:
             for symbol, countries in SYMBOL_COUNTRY_MAP.items()
         },
     }
+
+
+def _exec_get_headline_sentiment(inp: dict) -> list[dict]:
+    from src.db.models import NewsHeadline
+
+    start = _parse_date(inp.get("start_date"), default_days_ago=7)
+    end = _parse_date(inp.get("end_date"), default_days_ago=0)
+    source = inp.get("source")
+    sentiment_filter = inp.get("sentiment")
+    limit = inp.get("limit", 20)
+
+    with get_session() as session:
+        from sqlalchemy import func as sqlfunc
+        query = session.query(NewsHeadline).filter(
+            sqlfunc.date(NewsHeadline.published_at) >= start,
+            sqlfunc.date(NewsHeadline.published_at) <= end,
+        )
+
+        if source:
+            query = query.filter(NewsHeadline.source == source)
+        if sentiment_filter:
+            query = query.filter(NewsHeadline.sentiment_label == sentiment_filter)
+
+        headlines = query.order_by(
+            NewsHeadline.published_at.desc()
+        ).limit(limit).all()
+
+    return [
+        {
+            "headline": h.headline,
+            "source": h.source,
+            "published_at": str(h.published_at),
+            "sentiment_score": h.sentiment_score,
+            "sentiment_label": h.sentiment_label,
+        }
+        for h in headlines
+    ]
+
+
+def _exec_get_sentiment_summary(inp: dict) -> dict:
+    from src.db.models import NewsHeadline
+    from sqlalchemy import func as sqlfunc
+
+    start = _parse_date(inp.get("start_date"), default_days_ago=7)
+    end = _parse_date(inp.get("end_date"), default_days_ago=0)
+    source = inp.get("source")
+
+    with get_session() as session:
+        base_query = session.query(NewsHeadline).filter(
+            sqlfunc.date(NewsHeadline.published_at) >= start,
+            sqlfunc.date(NewsHeadline.published_at) <= end,
+            NewsHeadline.sentiment_score.isnot(None),
+        )
+
+        if source:
+            base_query = base_query.filter(NewsHeadline.source == source)
+
+        # Aggregate stats
+        stats = base_query.with_entities(
+            sqlfunc.count(NewsHeadline.id).label("total"),
+            sqlfunc.avg(NewsHeadline.sentiment_score).label("avg_score"),
+            sqlfunc.min(NewsHeadline.sentiment_score).label("min_score"),
+            sqlfunc.max(NewsHeadline.sentiment_score).label("max_score"),
+        ).first()
+
+        total = stats.total or 0
+        if total == 0:
+            return {
+                "period": f"{start} to {end}",
+                "total_headlines": 0,
+                "message": "No scored headlines in this period.",
+            }
+
+        # Distribution counts
+        positive = base_query.filter(NewsHeadline.sentiment_label == "positive").count()
+        negative = base_query.filter(NewsHeadline.sentiment_label == "negative").count()
+        neutral = base_query.filter(NewsHeadline.sentiment_label == "neutral").count()
+
+        # Daily trend (avg sentiment per day)
+        daily = base_query.with_entities(
+            sqlfunc.date(NewsHeadline.published_at).label("day"),
+            sqlfunc.avg(NewsHeadline.sentiment_score).label("avg"),
+            sqlfunc.count(NewsHeadline.id).label("count"),
+        ).group_by(
+            sqlfunc.date(NewsHeadline.published_at),
+        ).order_by(
+            sqlfunc.date(NewsHeadline.published_at),
+        ).all()
+
+    avg_score = float(stats.avg_score) if stats.avg_score else 0
+    mood = "positive" if avg_score > 0.1 else "negative" if avg_score < -0.1 else "neutral"
+
+    return {
+        "period": f"{start} to {end}",
+        "total_headlines": total,
+        "overall_mood": mood,
+        "avg_sentiment_score": round(avg_score, 4),
+        "min_score": round(float(stats.min_score), 4),
+        "max_score": round(float(stats.max_score), 4),
+        "distribution": {
+            "positive": positive,
+            "negative": negative,
+            "neutral": neutral,
+        },
+        "daily_trend": [
+            {
+                "date": str(d.day),
+                "avg_sentiment": round(float(d.avg), 4),
+                "headline_count": d.count,
+            }
+            for d in daily
+        ],
+    }
+
+
+def _exec_search_similar_content(inp: dict) -> list[dict]:
+    query_text = inp["query"]
+    content_type = inp.get("content_type", "headlines")
+    limit = inp.get("limit", 10)
+
+    # Generate embedding for the query
+    generator = EmbeddingGenerator()
+    query_vectors = generator.encode([query_text])
+    query_embedding = query_vectors[0].tolist()
+
+    with get_session() as session:
+        if content_type == "events":
+            from src.db.models import Event
+            # pgvector cosine distance operator: <=>
+            results = session.query(
+                Event,
+                Event.embedding.cosine_distance(query_embedding).label("distance"),
+            ).filter(
+                Event.embedding.isnot(None),
+            ).order_by(
+                Event.embedding.cosine_distance(query_embedding),
+            ).limit(limit).all()
+
+            return [
+                {
+                    "event_date": str(r.Event.event_date),
+                    "actor1_name": r.Event.actor1_name,
+                    "actor2_name": r.Event.actor2_name,
+                    "action_geo_name": r.Event.action_geo_name,
+                    "goldstein_scale": r.Event.goldstein_scale,
+                    "num_mentions": r.Event.num_mentions,
+                    "cosine_distance": round(float(r.distance), 4),
+                }
+                for r in results
+            ]
+        else:
+            from src.db.models import NewsHeadline
+            results = session.query(
+                NewsHeadline,
+                NewsHeadline.embedding.cosine_distance(query_embedding).label("distance"),
+            ).filter(
+                NewsHeadline.embedding.isnot(None),
+            ).order_by(
+                NewsHeadline.embedding.cosine_distance(query_embedding),
+            ).limit(limit).all()
+
+            return [
+                {
+                    "headline": r.NewsHeadline.headline,
+                    "source": r.NewsHeadline.source,
+                    "published_at": str(r.NewsHeadline.published_at),
+                    "sentiment_score": r.NewsHeadline.sentiment_score,
+                    "sentiment_label": r.NewsHeadline.sentiment_label,
+                    "cosine_distance": round(float(r.distance), 4),
+                }
+                for r in results
+            ]

@@ -66,7 +66,7 @@ export default function CorrelationExplorer() {
         <select
           value={method}
           onChange={(e) => setMethod(e.target.value)}
-          className="bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary"
+          className="bg-glass border border-glass-border rounded-lg px-3 py-1.5 text-sm text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 transition-all"
         >
           <option value="pearson">Pearson</option>
           <option value="spearman">Spearman</option>
@@ -75,8 +75,8 @@ export default function CorrelationExplorer() {
 
       {/* Per-Metric Correlation Cards */}
       <motion.div {...fadeInUp} transition={{ delay: 0.2, duration: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             {symbol} — Correlation per Event Metric
           </h3>
           {corrLoading ? (
@@ -126,8 +126,8 @@ export default function CorrelationExplorer() {
 
       {/* Rolling Correlation */}
       <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             Rolling Correlation: {symbol} x {selectedMetric.replace(/_/g, ' ')}
           </h3>
           {rollingLoading ? (

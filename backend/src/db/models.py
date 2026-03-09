@@ -17,6 +17,11 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
+from pgvector.sqlalchemy import Vector
+
+# Embedding dimension for all-MiniLM-L6-v2 (sentence-transformers)
+# Free, local model — no API key needed, 384-dim output, fast inference
+EMBEDDING_DIM = 384
 
 
 class Base(DeclarativeBase):
@@ -80,6 +85,11 @@ class Event(Base):
 
     # Source
     source_url = Column(Text)
+
+    # Embedding — 384-dim vector from sentence-transformers (all-MiniLM-L6-v2)
+    # Embeds a summary string like "USA military action against IRN in Tehran"
+    # NULL until the embedding pipeline processes this event
+    embedding = Column(Vector(EMBEDDING_DIM), nullable=True)
 
     # Relationships
     market_links = relationship("EventMarketLink", back_populates="event")
@@ -275,9 +285,14 @@ class NewsHeadline(Base):
     description = Column(Text, nullable=True)  # RSS summary, can be long or absent
     published_at = Column(DateTime, nullable=False, index=True)
 
-    # Sentiment — populated in Phase 2 by analysis/sentiment.py
+    # Sentiment — populated by analysis/sentiment.py
     sentiment_score = Column(Float, nullable=True)  # -1.0 (negative) to +1.0 (positive)
     sentiment_label = Column(String(10), nullable=True)  # "positive", "negative", "neutral"
+
+    # Embedding — 384-dim vector from sentence-transformers (all-MiniLM-L6-v2)
+    # Used for semantic search: "find headlines similar in meaning to X"
+    # NULL until the embedding pipeline processes this headline
+    embedding = Column(Vector(EMBEDDING_DIM), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

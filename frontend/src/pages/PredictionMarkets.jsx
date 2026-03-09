@@ -186,7 +186,7 @@ export default function PredictionMarkets() {
     <div className="space-y-6">
       {/* Header */}
       <motion.div {...fadeInUp}>
-        <h2 className="text-2xl font-bold text-text-primary">Prediction Markets</h2>
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight">Prediction Markets</h2>
         <p className="text-sm text-text-secondary mt-1">
           Geopolitical prediction market odds from Polymarket — click any row to see the probability trend
         </p>
@@ -204,8 +204,8 @@ export default function PredictionMarkets() {
             onClick={() => setSortBy(key)}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
               sortBy === key
-                ? 'bg-accent-blue text-white'
-                : 'bg-bg-secondary text-text-secondary hover:text-text-primary border border-border'
+                ? 'bg-accent-blue/20 text-accent-blue border border-accent-blue/30'
+                : 'glass-panel text-text-secondary hover:text-text-primary'
             }`}
           >
             {label}
@@ -217,9 +217,9 @@ export default function PredictionMarkets() {
       </motion.div>
 
       {/* Markets table */}
-      <div className="bg-bg-secondary border border-border rounded-xl overflow-hidden">
+      <div className="glass-panel overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[1fr_120px_100px_32px] gap-3 px-4 py-2 border-b border-border text-xs text-text-secondary uppercase tracking-wide">
+        <div className="grid grid-cols-[1fr_120px_100px_32px] gap-3 px-4 py-2 border-b border-glass-border text-[10px] text-text-secondary uppercase tracking-wider font-mono">
           <span>Market</span>
           <span className="text-right">Probability</span>
           <span className="text-right">24h Volume</span>

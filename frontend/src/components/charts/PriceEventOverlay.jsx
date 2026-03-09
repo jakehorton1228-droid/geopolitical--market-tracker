@@ -13,8 +13,8 @@ function eventColor(row) {
 
 export default function PriceEventOverlay({ data, symbol }) {
   return (
-    <div className="bg-bg-secondary border border-border rounded-xl p-4">
-      <h3 className="text-sm font-medium text-text-primary mb-3">
+    <div className="glass-panel p-4 border-gradient-top">
+      <h3 className="section-label mb-3">
         {symbol} — Price + Events
       </h3>
       <ResponsiveContainer width="100%" height={350}>

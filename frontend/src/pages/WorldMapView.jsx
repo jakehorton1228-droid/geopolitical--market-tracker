@@ -83,7 +83,7 @@ export default function WorldMapView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map */}
-        <motion.div {...scaleIn} transition={{ delay: 0.2, duration: 0.5 }} className="lg:col-span-2 bg-bg-secondary border border-border rounded-xl p-4">
+        <motion.div {...scaleIn} transition={{ delay: 0.2, duration: 0.5 }} className="lg:col-span-2 glass-panel p-4">
           {isLoading ? (
             <LoadingSpinner message="Loading map data..." />
           ) : (
@@ -137,8 +137,8 @@ export default function WorldMapView() {
         </motion.div>
 
         {/* Detail Panel */}
-        <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }} className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">Country Detail</h3>
+        <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }} className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">Country Detail</h3>
           <AnimatePresence mode="wait">
             {selected ? (
               <motion.div
@@ -155,7 +155,7 @@ export default function WorldMapView() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-bg-tertiary rounded-lg p-2">
+                  <div className="glass-inner p-2">
                     <p className="text-text-secondary">Avg Goldstein</p>
                     <p className="font-bold" style={{
                       color: selected.avg_goldstein < 0 ? COLORS.red : COLORS.green,
@@ -163,15 +163,15 @@ export default function WorldMapView() {
                       {selected.avg_goldstein.toFixed(2)}
                     </p>
                   </div>
-                  <div className="bg-bg-tertiary rounded-lg p-2">
+                  <div className="glass-inner p-2">
                     <p className="text-text-secondary">Mentions</p>
                     <p className="font-bold">{selected.total_mentions.toLocaleString()}</p>
                   </div>
-                  <div className="bg-bg-tertiary rounded-lg p-2">
+                  <div className="glass-inner p-2">
                     <p className="text-text-secondary">Conflict</p>
                     <p className="font-bold text-accent-red">{selected.conflict_count}</p>
                   </div>
-                  <div className="bg-bg-tertiary rounded-lg p-2">
+                  <div className="glass-inner p-2">
                     <p className="text-text-secondary">Cooperation</p>
                     <p className="font-bold text-accent-green">{selected.cooperation_count}</p>
                   </div>

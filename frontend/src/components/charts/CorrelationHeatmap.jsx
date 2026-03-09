@@ -5,8 +5,8 @@ export default function CorrelationHeatmap({ data }) {
   const { symbols, event_metrics, matrix } = data
 
   return (
-    <div className="bg-bg-secondary border border-border rounded-xl p-4 overflow-x-auto">
-      <h3 className="text-sm font-medium text-text-primary mb-3">Correlation Matrix</h3>
+    <div className="glass-panel p-4 overflow-x-auto border-gradient-top">
+      <h3 className="section-label mb-3">Correlation Matrix</h3>
       <table className="text-xs w-full">
         <thead>
           <tr>

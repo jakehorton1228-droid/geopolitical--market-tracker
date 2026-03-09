@@ -135,6 +135,7 @@ def events_by_country(
     results = db.query(
         Event.action_geo_country_code,
         func.count(Event.id).label("count"),
+        func.avg(Event.goldstein_scale).label("avg_goldstein"),
     ).filter(
         Event.event_date >= start_date,
         Event.event_date <= end_date,
@@ -146,7 +147,14 @@ def events_by_country(
         func.count(Event.id).desc(),
     ).limit(limit).all()
 
-    return [{"country_code": r[0], "count": r[1]} for r in results]
+    return [
+        {
+            "country_code": r[0],
+            "count": r[1],
+            "avg_goldstein": round(float(r[2]), 2) if r[2] is not None else None,
+        }
+        for r in results
+    ]
 
 
 @router.get("/by-type", response_model=list[dict])

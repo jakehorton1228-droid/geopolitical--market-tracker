@@ -63,7 +63,7 @@ function MessageBubble({ msg, index }) {
             ? 'bg-accent-blue text-white'
             : isError
               ? 'bg-red-500/10 border border-red-500/30 text-text-primary'
-              : 'bg-bg-secondary border border-border text-text-primary'
+              : 'glass-panel text-text-primary'
         }`}
       >
         {isUser ? (
@@ -87,7 +87,7 @@ function ThinkingIndicator() {
       exit={{ opacity: 0, y: -10 }}
       className="flex justify-start"
     >
-      <div className="bg-bg-secondary border border-border rounded-xl px-4 py-3">
+      <div className="glass-panel px-4 py-3">
         <div className="flex items-center gap-2 text-sm text-text-secondary">
           <div className="flex gap-1">
             <span className="w-1.5 h-1.5 bg-accent-blue rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -142,7 +142,7 @@ export default function AgentChat() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={clearHistory}
-            className="text-xs text-text-secondary hover:text-text-primary bg-bg-secondary border border-border px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs text-text-secondary hover:text-text-primary glass-panel px-3 py-1.5 transition-colors"
           >
             Clear chat
           </motion.button>
@@ -182,7 +182,7 @@ export default function AgentChat() {
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleSuggestion(s)}
-                    className="text-left text-xs text-text-secondary hover:text-text-primary bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg px-3 py-2 transition-colors"
+                    className="text-left text-xs text-text-secondary hover:text-text-primary glass-panel glass-panel-hover px-3 py-2 transition-colors"
                   >
                     {s}
                   </motion.button>
@@ -216,7 +216,7 @@ export default function AgentChat() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about events, markets, correlations..."
             disabled={isLoading}
-            className="flex-1 bg-bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent-blue disabled:opacity-50"
+            className="flex-1 bg-glass border border-glass-border rounded-lg px-4 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent-blue/50 focus:shadow-[0_0_12px_rgba(59,130,246,0.1)] disabled:opacity-50 backdrop-blur-xl transition-all"
           />
           <motion.button
             whileHover={{ scale: 1.03 }}

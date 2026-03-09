@@ -23,7 +23,7 @@ services:
   # DATABASE
   # ===========================================================================
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: gmt-db
     environment:
       POSTGRES_USER: postgres

@@ -11,7 +11,7 @@ export default function PredictionCard({ prediction }) {
   const color = signalColor(prediction.probability_up)
 
   return (
-    <div className="bg-bg-secondary border border-border rounded-xl p-4">
+    <div className="glass-panel glass-panel-hover p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-text-secondary uppercase tracking-wide">
           Logistic Regression

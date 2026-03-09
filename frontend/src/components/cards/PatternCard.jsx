@@ -19,7 +19,7 @@ export default function PatternCard({ pattern, totalTradingDays }) {
   const bias = biasLabel(pattern.up_percentage)
 
   return (
-    <div className="bg-bg-secondary border border-border rounded-xl p-4">
+    <div className="glass-panel glass-panel-hover p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-text-secondary uppercase tracking-wide">
           {pattern.event_filter}

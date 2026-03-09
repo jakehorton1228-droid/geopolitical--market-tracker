@@ -13,39 +13,66 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-56 bg-bg-secondary border-r border-border flex flex-col shrink-0">
-      <div className="p-4 border-b border-border">
-        <h1 className="text-lg font-bold text-text-primary tracking-tight">
-          GeoMarket
-        </h1>
-        <p className="text-xs text-text-secondary mt-0.5">
-          Geopolitical Tracker
-        </p>
+    <aside className="w-56 flex flex-col shrink-0 border-r border-glass-border bg-glass backdrop-blur-xl">
+      {/* Brand */}
+      <div className="p-4 border-b border-glass-border">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-accent-blue/20 flex items-center justify-center">
+            <span className="text-accent-blue text-sm font-bold">G</span>
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-text-primary tracking-tight">
+              GeoMarket
+            </h1>
+            <p className="text-[10px] text-text-secondary leading-none">
+              Intelligence Platform
+            </p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
+      {/* Status indicator */}
+      <div className="px-4 py-2 border-b border-glass-border">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-green pulse-live" />
+          <span className="text-[10px] text-text-secondary uppercase tracking-wider font-mono">
+            Systems Online
+          </span>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-2 space-y-0.5">
         {NAV_ITEMS.map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                 isActive
-                  ? 'bg-bg-tertiary text-accent-blue font-medium'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
+                  ? 'bg-accent-blue/10 text-accent-blue font-medium border border-accent-blue/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 border border-transparent'
               }`
             }
           >
-            <span className="text-base">{icon}</span>
+            <span className="text-base opacity-70">{icon}</span>
             {label}
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-3 border-t border-border">
-        <p className="text-[10px] text-text-secondary text-center">
-          GDELT + Yahoo + RSS + FRED + Polymarket
-        </p>
+      {/* Footer */}
+      <div className="p-3 border-t border-glass-border">
+        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+          {['GDELT', 'Yahoo', 'RSS', 'FRED', 'Poly'].map((src) => (
+            <span
+              key={src}
+              className="text-[9px] font-mono text-text-secondary/60 bg-bg-tertiary/30 px-1.5 py-0.5 rounded"
+            >
+              {src}
+            </span>
+          ))}
+        </div>
       </div>
     </aside>
   )

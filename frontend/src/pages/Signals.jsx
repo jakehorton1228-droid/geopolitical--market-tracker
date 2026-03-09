@@ -72,7 +72,7 @@ export default function Signals() {
 
       {/* How This Works — collapsible methodology panel */}
       <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl">
+        <div className="glass-panel">
           <button
             onClick={() => setShowMethodology(!showMethodology)}
             className="w-full flex items-center justify-between px-4 py-3 text-sm text-text-secondary hover:text-text-primary transition-colors"
@@ -144,7 +144,7 @@ export default function Signals() {
 
       {/* Data coverage banner */}
       <motion.div {...fadeInUp} transition={{ delay: 0.2, duration: 0.4 }}>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary bg-bg-secondary border border-border rounded-lg px-4 py-2">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary glass-panel px-4 py-2">
           <span>
             <span className="text-text-primary font-medium">Date Range:</span>{' '}
             Jan 2016 — {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
@@ -187,9 +187,9 @@ export default function Signals() {
         {summaryLoading ? (
           <LoadingSpinner message="Loading model summary..." />
         ) : modelSummary ? (
-          <div className="bg-bg-secondary border border-border rounded-xl p-4">
+          <div className="glass-panel p-4 border-gradient-top">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-text-primary">
+              <h3 className="section-label">
                 Model Summary — {symbol}
               </h3>
               <span className="text-[10px] text-text-secondary">
@@ -202,24 +202,24 @@ export default function Signals() {
               initial="initial"
               animate="animate"
             >
-              <motion.div variants={staggerItem.variants} className="bg-bg-tertiary rounded-lg p-2">
+              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
                 <p className="text-text-secondary">Accuracy</p>
                 <p className={`text-lg font-bold ${accuracyColor(modelSummary.accuracy)}`}>
                   {(modelSummary.accuracy * 100).toFixed(1)}%
                 </p>
                 <p className="text-[10px] text-text-secondary mt-0.5">Baseline (random): 50%</p>
               </motion.div>
-              <motion.div variants={staggerItem.variants} className="bg-bg-tertiary rounded-lg p-2">
+              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
                 <p className="text-text-secondary">Training Samples</p>
                 <p className="text-lg font-bold">{modelSummary.n_training_samples.toLocaleString()}</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">Days with events + market data</p>
               </motion.div>
-              <motion.div variants={staggerItem.variants} className="bg-bg-tertiary rounded-lg p-2">
+              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
                 <p className="text-text-secondary">UP Ratio</p>
                 <p className="text-lg font-bold">{(modelSummary.up_ratio * 100).toFixed(0)}%</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">% of days market went up</p>
               </motion.div>
-              <motion.div variants={staggerItem.variants} className="bg-bg-tertiary rounded-lg p-2">
+              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
                 <p className="text-text-secondary">Accuracy Std</p>
                 <p className="text-lg font-bold">{(modelSummary.accuracy_std * 100).toFixed(1)}%</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">Variation across 5 CV folds</p>
@@ -285,7 +285,7 @@ export default function Signals() {
             ))}
           </motion.div>
         ) : (
-          <div className="bg-bg-secondary border border-border rounded-xl p-8 text-center text-text-secondary">
+          <div className="glass-panel p-8 text-center text-text-secondary">
             No patterns found for {symbol}. Needs sufficient event + market data overlap.
           </div>
         )}

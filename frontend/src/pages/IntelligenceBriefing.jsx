@@ -54,9 +54,32 @@ function deltaPrefix(delta) {
   return delta > 0 ? '+' : ''
 }
 
-// Sentiment color placeholder (Phase D will add real sentiment)
-function headlineSentiment() {
+// Sentiment-driven text color for headlines
+function sentimentColor(score) {
+  if (score == null) return 'text-text-primary'
+  if (score > 0.3) return 'text-accent-green'
+  if (score > 0.1) return 'text-accent-green/70'
+  if (score < -0.3) return 'text-accent-red'
+  if (score < -0.1) return 'text-accent-red/70'
   return 'text-text-primary'
+}
+
+// Small colored dot to indicate sentiment visually
+function SentimentDot({ score }) {
+  if (score == null) return null
+  const color = score > 0.1 ? 'bg-accent-green' : score < -0.1 ? 'bg-accent-red' : 'bg-text-secondary/40'
+  return <span className={`w-1.5 h-1.5 rounded-full ${color} shrink-0 mt-1.5`} />
+}
+
+// Risk radar color: blends red (conflict) ↔ amber (neutral) ↔ green (cooperation)
+// based on average Goldstein score, with event count controlling opacity
+function riskColor(avgGoldstein, rank, total) {
+  const heat = 1 - rank / total
+  if (avgGoldstein == null) return `rgba(239, 68, 68, ${0.1 + heat * 0.3})`
+  if (avgGoldstein < -2) return `rgba(239, 68, 68, ${0.15 + heat * 0.35})`   // red — conflictual
+  if (avgGoldstein < 0) return `rgba(245, 158, 11, ${0.1 + heat * 0.3})`     // amber — mildly negative
+  if (avgGoldstein < 2) return `rgba(59, 130, 246, ${0.1 + heat * 0.25})`    // blue — neutral
+  return `rgba(16, 185, 129, ${0.1 + heat * 0.3})`                           // green — cooperative
 }
 
 export default function IntelligenceBriefing() {
@@ -106,7 +129,13 @@ export default function IntelligenceBriefing() {
     <div className="space-y-6">
       {/* Header */}
       <motion.div {...fadeInUp}>
-        <h2 className="text-2xl font-bold text-text-primary">Intelligence Briefing</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold text-text-primary tracking-tight">Intelligence Briefing</h2>
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-accent-green uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-green pulse-live" />
+            Live
+          </span>
+        </div>
         <p className="text-sm text-text-secondary mt-1">
           Real-time fusion of geopolitical events, markets, economic indicators, news, and predictions
         </p>
@@ -114,8 +143,8 @@ export default function IntelligenceBriefing() {
 
       {/* Panel 1: FRED Macro Strip */}
       <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             Economic Indicators
           </h3>
           {indicatorsLoading ? (
@@ -140,9 +169,9 @@ export default function IntelligenceBriefing() {
                   <motion.div
                     key={ind.series_id}
                     variants={staggerItem.variants}
-                    className="bg-bg-tertiary rounded-lg p-3"
+                    className="glass-inner p-3"
                   >
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wide mb-1">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider font-mono mb-1">
                       {config.label}
                     </p>
                     <p className="text-lg font-bold text-text-primary">
@@ -173,8 +202,8 @@ export default function IntelligenceBriefing() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Panel 2: Prediction Markets (movers if available, otherwise top by volume) */}
         <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
-          <div className="bg-bg-secondary border border-border rounded-xl p-4 h-full">
-            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
+          <div className="glass-panel glass-panel-hover p-4 h-full border-gradient-top">
+            <h3 className="section-label mb-3">
               {movers?.length > 0 ? 'Prediction Market Movers (24h)' : 'Top Prediction Markets'}
             </h3>
             {(moversLoading || marketsLoading) ? (
@@ -200,7 +229,7 @@ export default function IntelligenceBriefing() {
                     <motion.div
                       key={m.market_id || i}
                       variants={staggerItem.variants}
-                      className="flex items-center gap-3 bg-bg-tertiary rounded-lg px-3 py-2"
+                      className="flex items-center gap-3 glass-inner px-3 py-2"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-text-primary truncate">
@@ -260,10 +289,24 @@ export default function IntelligenceBriefing() {
 
         {/* Panel 4: News Headlines */}
         <motion.div {...fadeInUp} transition={{ delay: 0.3 }}>
-          <div className="bg-bg-secondary border border-border rounded-xl p-4 h-full">
-            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
-              Latest Headlines
-            </h3>
+          <div className="glass-panel glass-panel-hover p-4 h-full border-gradient-top">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="section-label">
+                Latest Headlines
+              </h3>
+              {headlines?.length > 0 && (() => {
+                const scored = headlines.filter(h => h.sentiment_score != null)
+                if (!scored.length) return null
+                const avg = scored.reduce((sum, h) => sum + h.sentiment_score, 0) / scored.length
+                const label = avg > 0.1 ? 'Positive' : avg < -0.1 ? 'Negative' : 'Neutral'
+                const color = avg > 0.1 ? 'text-accent-green' : avg < -0.1 ? 'text-accent-red' : 'text-text-secondary'
+                return (
+                  <span className={`text-[10px] font-mono ${color}`}>
+                    Mood: {label} ({avg > 0 ? '+' : ''}{avg.toFixed(2)})
+                  </span>
+                )
+              })()}
+            </div>
             {headlinesLoading ? (
               <div className="space-y-2 animate-pulse">
                 {[...Array(5)].map((_, i) => (
@@ -286,7 +329,8 @@ export default function IntelligenceBriefing() {
                     <span className="text-[10px] text-text-secondary uppercase shrink-0 mt-0.5 w-14">
                       {h.source}
                     </span>
-                    <p className={`text-sm ${headlineSentiment()} leading-tight`}>
+                    <SentimentDot score={h.sentiment_score} />
+                    <p className={`text-sm ${sentimentColor(h.sentiment_score)} leading-tight`}>
                       {h.headline}
                     </p>
                   </motion.div>
@@ -303,9 +347,9 @@ export default function IntelligenceBriefing() {
 
       {/* Panel 3: Fused Event/Price Timeline */}
       <motion.div {...fadeInUp} transition={{ delay: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
+        <div className="glass-panel p-4 border-gradient-top">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+            <h3 className="section-label">
               Fused Timeline: {selectedSymbol} + Events
             </h3>
             <span className="text-[10px] text-text-secondary">
@@ -373,8 +417,8 @@ export default function IntelligenceBriefing() {
 
       {/* Panel 5: Risk Radar */}
       <motion.div {...fadeInUp} transition={{ delay: 0.5 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             Risk Radar — Hottest Countries (30d)
           </h3>
           {countryLoading ? (
@@ -391,14 +435,13 @@ export default function IntelligenceBriefing() {
               animate="animate"
             >
               {riskCountries.map((c, i) => {
-                // Heat color based on rank
-                const heat = 1 - i / riskCountries.length
-                const bgColor = `rgba(239, 68, 68, ${0.1 + heat * 0.3})`
+                const bgColor = riskColor(c.avg_goldstein, i, riskCountries.length)
+                const goldstein = c.avg_goldstein
                 return (
                   <motion.div
                     key={c.country_code}
                     variants={staggerItem.variants}
-                    className="rounded-lg p-3 text-center border border-border"
+                    className="rounded-lg p-3 text-center border border-glass-border"
                     style={{ backgroundColor: bgColor }}
                   >
                     <p className="text-lg font-bold text-text-primary">
@@ -407,6 +450,13 @@ export default function IntelligenceBriefing() {
                     <p className="text-xs text-text-secondary mt-1">
                       {c.count.toLocaleString()} events
                     </p>
+                    {goldstein != null && (
+                      <p className={`text-[10px] font-mono mt-0.5 ${
+                        goldstein < -1 ? 'text-accent-red' : goldstein > 1 ? 'text-accent-green' : 'text-text-secondary'
+                      }`}>
+                        {goldstein > 0 ? '+' : ''}{goldstein.toFixed(1)}
+                      </p>
+                    )}
                   </motion.div>
                 )
               })}

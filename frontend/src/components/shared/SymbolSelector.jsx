@@ -9,7 +9,7 @@ export default function SymbolSelector({ value, onChange }) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-blue"
+      className="bg-glass border border-glass-border rounded-lg px-3 py-1.5 text-sm text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 focus:shadow-[0_0_12px_rgba(59,130,246,0.1)] transition-all"
     >
       <optgroup label="Quick Select">
         {DEFAULT_SYMBOLS.map((s) => (

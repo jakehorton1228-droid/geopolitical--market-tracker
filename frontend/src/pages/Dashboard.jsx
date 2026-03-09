@@ -66,7 +66,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <motion.div {...fadeInUp}>
-        <h2 className="text-2xl font-bold text-text-primary">Dashboard</h2>
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight">Dashboard</h2>
         <p className="text-sm text-text-secondary mt-1">
           Overview of geopolitical events and market correlations
         </p>
@@ -118,8 +118,8 @@ export default function Dashboard() {
 
       {/* FRED Economic Indicators */}
       <motion.div {...fadeInUp} transition={{ delay: 0.2, duration: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             Economic Indicators (FRED)
           </h3>
           {indicatorsLoading ? (
@@ -144,9 +144,9 @@ export default function Dashboard() {
                   <motion.div
                     key={ind.series_id}
                     variants={staggerItem.variants}
-                    className="bg-bg-tertiary rounded-lg p-3"
+                    className="glass-inner p-3"
                   >
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wide mb-1">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider font-mono mb-1">
                       {config.label}
                     </p>
                     <p className="text-lg font-bold text-text-primary">
@@ -183,7 +183,7 @@ export default function Dashboard() {
         ) : topCorr && topCorr.length > 0 ? (
           <TopCorrelationsBar data={topCorr} />
         ) : (
-          <div className="bg-bg-secondary border border-border rounded-xl p-8 text-center text-text-secondary">
+          <div className="glass-panel p-8 text-center text-text-secondary">
             No correlation data available. Ingest events and market data first.
           </div>
         )}
@@ -191,8 +191,8 @@ export default function Dashboard() {
 
       {/* Recent High-Impact Events */}
       <motion.div {...fadeInUp} transition={{ delay: 0.4, duration: 0.4 }}>
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
+        <div className="glass-panel p-4 border-gradient-top">
+          <h3 className="section-label mb-3">
             Recent High-Impact Events
           </h3>
           {eventsLoading ? (

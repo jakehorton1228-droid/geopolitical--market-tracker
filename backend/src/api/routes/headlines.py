@@ -5,7 +5,8 @@ Endpoints for querying RSS news headlines.
 
 USAGE:
 ------
-    GET /api/headlines/recent - Recent headlines, optionally filtered by source
+    GET  /api/headlines/recent    - Recent headlines, optionally filtered by source
+    POST /api/headlines/score     - Trigger sentiment scoring on unprocessed headlines
 """
 
 from datetime import date, timedelta
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from src.db.connection import get_session
 from src.db.queries import get_headlines_by_date_range
+from src.analysis.sentiment import score_unprocessed_headlines
 from src.api.schemas import HeadlineResponse
 
 router = APIRouter(prefix="/headlines", tags=["Headlines"])
@@ -43,3 +45,15 @@ def recent_headlines(
 
     headlines = get_headlines_by_date_range(db, start_date, end_date, source=source)
     return headlines[:limit]
+
+
+@router.post("/score")
+def trigger_sentiment_scoring(db: Session = Depends(get_db)):
+    """
+    Score sentiment on all unprocessed headlines.
+
+    Runs the sentiment model on headlines that don't have scores yet.
+    First call may be slow (~5s) as the model downloads/loads.
+    """
+    n_scored = score_unprocessed_headlines(db)
+    return {"headlines_scored": n_scored}

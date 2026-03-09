@@ -10,6 +10,8 @@ from prefect import flow, task, get_run_logger
 
 from src.analysis.correlation import CorrelationAnalyzer
 from src.analysis.historical_patterns import HistoricalPatternAnalyzer
+from src.analysis.sentiment import score_unprocessed_headlines
+from src.analysis.embeddings import embed_unprocessed_headlines, embed_unprocessed_events
 from src.config.constants import get_all_symbols, SYMBOLS
 
 
@@ -79,17 +81,60 @@ def compute_patterns() -> dict:
     return {"total_patterns": total_patterns, "symbols_processed": len(key_symbols)}
 
 
+@task(name="score-headline-sentiment", retries=1, retry_delay_seconds=30, log_prints=True)
+def score_sentiment() -> dict:
+    """Score sentiment on all unprocessed news headlines."""
+    logger = get_run_logger()
+    logger.info("Scoring sentiment on unprocessed headlines")
+
+    try:
+        from src.db.connection import get_session
+        with get_session() as session:
+            n_scored = score_unprocessed_headlines(session)
+        logger.info(f"Scored {n_scored} headlines")
+        return {"headlines_scored": n_scored}
+    except Exception as e:
+        logger.warning(f"Sentiment scoring failed: {e}")
+        return {"headlines_scored": 0, "error": str(e)}
+
+
+@task(name="generate-embeddings", retries=1, retry_delay_seconds=30, log_prints=True)
+def generate_embeddings() -> dict:
+    """Generate embeddings for unprocessed headlines and events."""
+    logger = get_run_logger()
+    logger.info("Generating embeddings for unprocessed content")
+
+    try:
+        from src.db.connection import get_session
+        with get_session() as session:
+            n_headlines = embed_unprocessed_headlines(session)
+        with get_session() as session:
+            n_events = embed_unprocessed_events(session)
+        logger.info(f"Embedded {n_headlines} headlines, {n_events} events")
+        return {"headlines_embedded": n_headlines, "events_embedded": n_events}
+    except Exception as e:
+        logger.warning(f"Embedding generation failed: {e}")
+        return {"headlines_embedded": 0, "events_embedded": 0, "error": str(e)}
+
+
 @flow(name="daily-analysis", retries=1, log_prints=True)
 def daily_analysis() -> dict:
-    """Run daily analysis: correlations + patterns."""
+    """Run daily analysis: sentiment + embeddings + correlations + patterns."""
     logger = get_run_logger()
     logger.info("Starting daily analysis pipeline")
 
+    sentiment_result = score_sentiment()
+    embedding_result = generate_embeddings()
     corr_result = compute_correlations()
     pattern_result = compute_patterns()
 
     logger.info("Daily analysis complete")
-    return {"correlations": corr_result, "patterns": pattern_result}
+    return {
+        "sentiment": sentiment_result,
+        "embeddings": embedding_result,
+        "correlations": corr_result,
+        "patterns": pattern_result,
+    }
 
 
 if __name__ == "__main__":
