@@ -8,6 +8,7 @@
  * Uses react-simple-maps for the map rendering and Natural Earth TopoJSON.
  */
 import { useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ComposableMap, Geographies, Geography, ZoomableGroup,
 } from 'react-simple-maps'
@@ -15,6 +16,7 @@ import DateRangePicker from '../components/shared/DateRangePicker'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useEventsMap } from '../api/events'
 import { COLORS, ISO_NUM_TO_A3 } from '../utils/constants'
+import { fadeInUp, scaleIn, staggerContainer, staggerItem } from '../utils/animations'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
@@ -63,23 +65,25 @@ export default function WorldMapView() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary">World Map</h2>
         <p className="text-sm text-text-secondary mt-1">
           Geopolitical event intensity by country
         </p>
-      </div>
+      </motion.div>
 
-      <DateRangePicker
-        startDate={startDate}
-        endDate={endDate}
-        onStartChange={setStartDate}
-        onEndChange={setEndDate}
-      />
+      <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }}>
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          onStartChange={setStartDate}
+          onEndChange={setEndDate}
+        />
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map */}
-        <div className="lg:col-span-2 bg-bg-secondary border border-border rounded-xl p-4">
+        <motion.div {...scaleIn} transition={{ delay: 0.2, duration: 0.5 }} className="lg:col-span-2 bg-bg-secondary border border-border rounded-xl p-4">
           {isLoading ? (
             <LoadingSpinner message="Loading map data..." />
           ) : (
@@ -130,55 +134,76 @@ export default function WorldMapView() {
               </span>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Detail Panel */}
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
+        <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }} className="bg-bg-secondary border border-border rounded-xl p-4">
           <h3 className="text-sm font-medium text-text-primary mb-3">Country Detail</h3>
-          {selected ? (
-            <div className="space-y-3">
-              <div>
-                <p className="text-2xl font-bold">{selected.country_code}</p>
-                <p className="text-xs text-text-secondary">{selected.event_count} events</p>
-              </div>
+          <AnimatePresence mode="wait">
+            {selected ? (
+              <motion.div
+                key={selected.country_code}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3"
+              >
+                <div>
+                  <p className="text-2xl font-bold">{selected.country_code}</p>
+                  <p className="text-xs text-text-secondary">{selected.event_count} events</p>
+                </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-bg-tertiary rounded-lg p-2">
-                  <p className="text-text-secondary">Avg Goldstein</p>
-                  <p className="font-bold" style={{
-                    color: selected.avg_goldstein < 0 ? COLORS.red : COLORS.green,
-                  }}>
-                    {selected.avg_goldstein.toFixed(2)}
-                  </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-bg-tertiary rounded-lg p-2">
+                    <p className="text-text-secondary">Avg Goldstein</p>
+                    <p className="font-bold" style={{
+                      color: selected.avg_goldstein < 0 ? COLORS.red : COLORS.green,
+                    }}>
+                      {selected.avg_goldstein.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-bg-tertiary rounded-lg p-2">
+                    <p className="text-text-secondary">Mentions</p>
+                    <p className="font-bold">{selected.total_mentions.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-bg-tertiary rounded-lg p-2">
+                    <p className="text-text-secondary">Conflict</p>
+                    <p className="font-bold text-accent-red">{selected.conflict_count}</p>
+                  </div>
+                  <div className="bg-bg-tertiary rounded-lg p-2">
+                    <p className="text-text-secondary">Cooperation</p>
+                    <p className="font-bold text-accent-green">{selected.cooperation_count}</p>
+                  </div>
                 </div>
-                <div className="bg-bg-tertiary rounded-lg p-2">
-                  <p className="text-text-secondary">Mentions</p>
-                  <p className="font-bold">{selected.total_mentions.toLocaleString()}</p>
-                </div>
-                <div className="bg-bg-tertiary rounded-lg p-2">
-                  <p className="text-text-secondary">Conflict</p>
-                  <p className="font-bold text-accent-red">{selected.conflict_count}</p>
-                </div>
-                <div className="bg-bg-tertiary rounded-lg p-2">
-                  <p className="text-text-secondary">Cooperation</p>
-                  <p className="font-bold text-accent-green">{selected.cooperation_count}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-text-secondary text-sm">
-              Click a country on the map to see details.
-            </p>
-          )}
+              </motion.div>
+            ) : (
+              <motion.p
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-text-secondary text-sm"
+              >
+                Click a country on the map to see details.
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           {/* Top Countries List */}
           {mapData && mapData.length > 0 && (
-            <div className="mt-4">
+            <motion.div
+              className="mt-4"
+              variants={staggerContainer.variants}
+              initial="initial"
+              animate="animate"
+            >
               <p className="text-xs text-text-secondary mb-2">Top Countries</p>
               <div className="space-y-1">
                 {mapData.slice(0, 10).map((c) => (
-                  <button
+                  <motion.button
                     key={c.country_code}
+                    variants={staggerItem.variants}
+                    whileHover={{ x: 4 }}
                     onClick={() => setSelected(c)}
                     className={`w-full flex justify-between items-center px-2 py-1 rounded text-xs transition-colors ${
                       selected?.country_code === c.country_code
@@ -188,12 +213,12 @@ export default function WorldMapView() {
                   >
                     <span>{c.country_code}</span>
                     <span className="font-mono">{c.event_count}</span>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   )

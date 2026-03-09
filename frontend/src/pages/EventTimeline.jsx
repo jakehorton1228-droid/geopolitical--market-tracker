@@ -10,12 +10,14 @@
  * using the SYMBOL_COUNTRY_MAP from the backend.
  */
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import SymbolSelector from '../components/shared/SymbolSelector'
 import DateRangePicker from '../components/shared/DateRangePicker'
 import PriceEventOverlay from '../components/charts/PriceEventOverlay'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useMarketWithEvents } from '../api/market'
 import { EVENT_GROUP_CONFIG } from '../utils/constants'
+import { fadeInUp, scaleIn } from '../utils/animations'
 
 function daysAgo(n) {
   const d = new Date()
@@ -34,14 +36,14 @@ export default function EventTimeline() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary">Event Timeline</h2>
         <p className="text-sm text-text-secondary mt-1">
           Price chart overlaid with geopolitical events
         </p>
-      </div>
+      </motion.div>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }} className="flex flex-wrap items-center gap-4">
         <SymbolSelector value={symbol} onChange={setSymbol} />
         <DateRangePicker
           startDate={startDate}
@@ -49,73 +51,83 @@ export default function EventTimeline() {
           onStartChange={setStartDate}
           onEndChange={setEndDate}
         />
-      </div>
+      </motion.div>
 
-      {isLoading ? (
-        <LoadingSpinner message={`Loading ${symbol} data...`} />
-      ) : data && data.length > 0 ? (
-        <PriceEventOverlay data={data} symbol={symbol} />
-      ) : (
-        <div className="bg-bg-secondary border border-border rounded-xl p-8 text-center text-text-secondary">
-          No data available for {symbol}. Try ingesting data first.
-        </div>
-      )}
+      <motion.div {...scaleIn} transition={{ delay: 0.2, duration: 0.4 }}>
+        {isLoading ? (
+          <LoadingSpinner message={`Loading ${symbol} data...`} />
+        ) : data && data.length > 0 ? (
+          <PriceEventOverlay data={data} symbol={symbol} />
+        ) : (
+          <div className="bg-bg-secondary border border-border rounded-xl p-8 text-center text-text-secondary">
+            No data available for {symbol}. Try ingesting data first.
+          </div>
+        )}
+      </motion.div>
 
       {eventDays.length > 0 && (
-        <div className="bg-bg-secondary border border-border rounded-xl p-4">
-          <h3 className="text-sm font-medium text-text-primary mb-3">
-            Event Days ({eventDays.length})
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-text-secondary border-b border-border">
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-right p-2">Close</th>
-                  <th className="text-right p-2">Return</th>
-                  <th className="text-right p-2">Events</th>
-                  <th className="text-right p-2">Goldstein</th>
-                  <th className="text-right p-2">Mentions</th>
-                  <th className="text-left p-2">Top Event</th>
-                </tr>
-              </thead>
-              <tbody>
-                {eventDays.slice().reverse().slice(0, 50).map((d) => (
-                  <tr key={d.date} className="border-b border-border/30 hover:bg-bg-tertiary/30">
-                    <td className="p-2 text-text-secondary">{d.date}</td>
-                    <td className="p-2 text-right font-mono">${d.close.toFixed(2)}</td>
-                    <td className="p-2 text-right font-mono" style={{
-                      color: (d.daily_return ?? 0) >= 0 ? '#10b981' : '#ef4444',
-                    }}>
-                      {d.daily_return != null ? `${(d.daily_return * 100).toFixed(2)}%` : '—'}
-                    </td>
-                    <td className="p-2 text-right">{d.event_count}</td>
-                    <td className="p-2 text-right font-mono" style={{
-                      color: (d.avg_goldstein ?? 0) < 0 ? '#ef4444' : '#10b981',
-                    }}>
-                      {d.avg_goldstein?.toFixed(1) ?? '—'}
-                    </td>
-                    <td className="p-2 text-right">{d.total_mentions ?? 0}</td>
-                    <td className="p-2 text-text-secondary">
-                      {d.top_event ? (
-                        <span className="flex items-center gap-1">
-                          <span
-                            className="w-1.5 h-1.5 rounded-full inline-block"
-                            style={{
-                              backgroundColor:
-                                EVENT_GROUP_CONFIG[d.top_event.group]?.color ?? '#9ca3af',
-                            }}
-                          />
-                          {d.top_event.description || d.top_event.group}
-                        </span>
-                      ) : '—'}
-                    </td>
+        <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }}>
+          <div className="bg-bg-secondary border border-border rounded-xl p-4">
+            <h3 className="text-sm font-medium text-text-primary mb-3">
+              Event Days ({eventDays.length})
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-text-secondary border-b border-border">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-right p-2">Close</th>
+                    <th className="text-right p-2">Return</th>
+                    <th className="text-right p-2">Events</th>
+                    <th className="text-right p-2">Goldstein</th>
+                    <th className="text-right p-2">Mentions</th>
+                    <th className="text-left p-2">Top Event</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {eventDays.slice().reverse().slice(0, 50).map((d, i) => (
+                    <motion.tr
+                      key={d.date}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.02, duration: 0.3 }}
+                      className="border-b border-border/30 hover:bg-bg-tertiary/30"
+                    >
+                      <td className="p-2 text-text-secondary">{d.date}</td>
+                      <td className="p-2 text-right font-mono">${d.close.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono" style={{
+                        color: (d.daily_return ?? 0) >= 0 ? '#10b981' : '#ef4444',
+                      }}>
+                        {d.daily_return != null ? `${(d.daily_return * 100).toFixed(2)}%` : '—'}
+                      </td>
+                      <td className="p-2 text-right">{d.event_count}</td>
+                      <td className="p-2 text-right font-mono" style={{
+                        color: (d.avg_goldstein ?? 0) < 0 ? '#ef4444' : '#10b981',
+                      }}>
+                        {d.avg_goldstein?.toFixed(1) ?? '—'}
+                      </td>
+                      <td className="p-2 text-right">{d.total_mentions ?? 0}</td>
+                      <td className="p-2 text-text-secondary">
+                        {d.top_event ? (
+                          <span className="flex items-center gap-1">
+                            <span
+                              className="w-1.5 h-1.5 rounded-full inline-block"
+                              style={{
+                                backgroundColor:
+                                  EVENT_GROUP_CONFIG[d.top_event.group]?.color ?? '#9ca3af',
+                              }}
+                            />
+                            {d.top_event.description || d.top_event.group}
+                          </span>
+                        ) : '—'}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   )
