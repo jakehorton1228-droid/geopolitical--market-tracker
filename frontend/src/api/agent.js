@@ -1,19 +1,21 @@
 /**
- * AI Agent API hook — manages conversation state with the Claude-powered analyst.
+ * AI Agent API hooks — single-agent and multi-agent chat.
  *
- * - useAgentChat() — Full chat state management:
- *   - messages[]   — Conversation history (user + assistant messages)
- *   - sendMessage() — POST to /api/agent/chat with message + history
- *   - isLoading    — True while agent is processing (tool calls + response)
- *   - error        — Last error message
+ * - useAgentChat(multiAgent) — Full chat state management:
+ *   - messages[]     — Conversation history (user + assistant messages)
+ *   - sendMessage()  — POST to /api/agent/chat or /api/agent/chat/multi
+ *   - isLoading      — True while agent is processing
+ *   - error          — Last error message
  *   - clearHistory() — Reset conversation
+ *   - multiAgent     — Whether to use the multi-agent LangGraph pipeline
  *
- * The agent may take 5-30 seconds to respond as it executes multiple tool
- * calls (querying events, running correlations, etc.) before synthesizing.
+ * Single-agent: one Claude with all 15 tools (fast, simple).
+ * Multi-agent: Supervisor → Collection → Analysis → Dissemination (thorough, slower).
  */
 import { useState, useCallback, useRef } from 'react'
 import api from './client'
-export function useAgentChat() {
+
+export function useAgentChat(multiAgent = false) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -31,23 +33,29 @@ export function useAgentChat() {
       content: m.content,
     }))
 
+    const endpoint = multiAgent ? '/agent/chat/multi' : '/agent/chat'
+    // Multi-agent takes longer (3 Claude calls + tools) — 3 min timeout
+    const timeout = multiAgent ? 180000 : 120000
+
     try {
-      const { data } = await api.post('/agent/chat', {
+      const { data } = await api.post(endpoint, {
         message: text,
         history,
-      }, { timeout: 120000 }) // 2 min timeout for agent calls
+      }, { timeout })
 
       const assistantMsg = {
         role: 'assistant',
         content: data.response,
         tool_calls: data.tool_calls || [],
-        model: data.model,
+        model: data.model || '',
+        // Multi-agent metadata
+        agents_used: data.agents_used || [],
+        iterations: data.iterations || 0,
       }
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       const detail = err.response?.data?.detail || err.message
       setError(detail)
-      // Add error as a system message so user sees it
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: `Error: ${detail}`,
@@ -56,7 +64,7 @@ export function useAgentChat() {
     } finally {
       setIsLoading(false)
     }
-  }, [messages])
+  }, [messages, multiAgent])
 
   const clearHistory = useCallback(() => {
     setMessages([])

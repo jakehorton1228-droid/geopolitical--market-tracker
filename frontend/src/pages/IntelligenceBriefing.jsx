@@ -226,7 +226,7 @@ export default function IntelligenceBriefing() {
                 animate="animate"
               >
                 {movers.map((m, i) => {
-                  const change = m.probability_change ?? 0
+                  const change = m.price_change ?? 0
                   const isUp = change > 0
                   return (
                     <motion.div
@@ -241,7 +241,7 @@ export default function IntelligenceBriefing() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-sm font-mono text-text-primary">
-                          {((m.probability ?? 0) * 100).toFixed(0)}%
+                          {((m.current_price ?? 0) * 100).toFixed(0)}%
                         </span>
                         <span
                           className={`text-xs font-mono ${isUp ? 'text-accent-green' : 'text-accent-red'}`}

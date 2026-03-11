@@ -46,6 +46,30 @@ function ToolChips({ tools }) {
   )
 }
 
+function AgentChips({ agents }) {
+  if (!agents || agents.length === 0) return null
+  const colors = {
+    collection: 'bg-accent-green/10 text-accent-green',
+    analysis: 'bg-accent-amber/10 text-accent-amber',
+    dissemination: 'bg-accent-blue/10 text-accent-blue',
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {agents.map((a, i) => (
+        <motion.span
+          key={a}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: i * 0.1, duration: 0.2 }}
+          className={`text-[10px] px-2 py-0.5 rounded-full ${colors[a] || 'bg-white/5 text-text-secondary'}`}
+        >
+          {a}
+        </motion.span>
+      ))}
+    </div>
+  )
+}
+
 function MessageBubble({ msg, index }) {
   const isUser = msg.role === 'user'
   const isError = msg.isError
@@ -74,12 +98,13 @@ function MessageBubble({ msg, index }) {
           </div>
         )}
         {!isUser && <ToolChips tools={msg.tool_calls} />}
+        {!isUser && <AgentChips agents={msg.agents_used} />}
       </div>
     </motion.div>
   )
 }
 
-function ThinkingIndicator() {
+function ThinkingIndicator({ multiAgent }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -94,7 +119,7 @@ function ThinkingIndicator() {
             <span className="w-1.5 h-1.5 bg-accent-blue rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 bg-accent-blue rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-          Analyzing with tools...
+          {multiAgent ? 'Multi-agent pipeline running...' : 'Analyzing with tools...'}
         </div>
       </div>
     </motion.div>
@@ -102,7 +127,8 @@ function ThinkingIndicator() {
 }
 
 export default function AgentChat() {
-  const { messages, isLoading, sendMessage, clearHistory } = useAgentChat()
+  const [multiAgent, setMultiAgent] = useState(false)
+  const { messages, isLoading, sendMessage, clearHistory } = useAgentChat(multiAgent)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -135,18 +161,32 @@ export default function AgentChat() {
             Claude-powered geopolitical market analysis
           </p>
         </div>
-        {messages.length > 0 && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={clearHistory}
-            className="text-xs text-text-secondary hover:text-text-primary glass-panel px-3 py-1.5 transition-colors"
+        <div className="flex items-center gap-3">
+          {/* Multi-agent toggle */}
+          <button
+            onClick={() => setMultiAgent(prev => !prev)}
+            disabled={isLoading}
+            className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary glass-panel px-3 py-1.5 transition-colors disabled:opacity-50"
           >
-            Clear chat
-          </motion.button>
-        )}
+            <div className={`w-7 h-4 rounded-full transition-colors relative ${multiAgent ? 'bg-accent-blue' : 'bg-white/10'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${multiAgent ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </div>
+            {multiAgent ? 'Multi-Agent' : 'Single Agent'}
+          </button>
+
+          {messages.length > 0 && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={clearHistory}
+              className="text-xs text-text-secondary hover:text-text-primary glass-panel px-3 py-1.5 transition-colors"
+            >
+              Clear chat
+            </motion.button>
+          )}
+        </div>
       </motion.div>
 
       {/* Messages area */}
@@ -194,7 +234,7 @@ export default function AgentChat() {
               {messages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} index={i} />
               ))}
-              {isLoading && <ThinkingIndicator />}
+              {isLoading && <ThinkingIndicator multiAgent={multiAgent} />}
             </>
           )}
         </AnimatePresence>
