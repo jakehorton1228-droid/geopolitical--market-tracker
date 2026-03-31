@@ -4,53 +4,47 @@ Project state tracking for cross-device continuity.
 
 ## Current Status
 
-**Phase B: Intelligence Briefing** - DONE
+**Phase G: MCP Server** - IN PROGRESS (next up)
 
-## Completed Phases
+## Architecture Pivot (2026-03-30)
 
-### Phase B (Done) - 2026-03-08
-- Created `IntelligenceBriefing.jsx` with 5-panel layout
-- Added `/briefing` route and sidebar navigation
-- All panels use existing API endpoints (no backend changes needed)
-- 5 panels implemented:
-  1. FRED Macro Strip - Economic indicators with AnimatedNumber counters
-  2. Prediction Market Movers - 24h probability changes from Polymarket
-  3. Fused Event/Price Timeline - CL=F price chart with event dots overlay
-  4. News Headlines - RSS headlines from Reuters, AP, BBC, Al Jazeera
-  5. Risk Radar - Top 8 countries by event count (30d) with heat coloring
+Pivoting from custom agent/frontend to MCP + Telegram + Kalshi:
+- Dropping: Anthropic API agent, LangGraph multi-agent, React frontend
+- Adding: MCP server, Telegram bot, Kalshi integration
+- Reason: Claude Max subscription eliminates need for API costs and custom chat UI
 
-### Phase A (Done)
-- Framer Motion animations foundation
-- New API endpoints for indicators, headlines, prediction markets
-- Prediction Markets page with sortable table and probability charts
+## Revised Roadmap
 
-### Phase C (Done)
-- Framer Motion animations on all pages
-- FRED economic indicators strip on Dashboard with animated counters
+| Phase | Focus | Status |
+|-------|-------|--------|
+| G | MCP Server — expose 15+ tools for Claude Desktop/Code | Next |
+| H | Cleanup — remove agent layer, frontend, unused deps | Planned |
+| I | Kalshi — data source #6, trade tracking, 6 new MCP tools | Planned |
+| J | Telegram Bot — daily briefings, anomaly alerts, watchlists | Planned |
+| K | Testing & Documentation | Planned |
 
-## Next Up
+## Completed Phases (A–F)
 
-### Phase D: Sentiment Analysis
-- pgvector extension for embeddings
-- NLP sentiment scoring on news headlines
-- Sentiment colors on Briefing headlines panel
+- A: Framer Motion, API endpoints, Prediction Markets page
+- B: Intelligence Briefing — 5-panel layout
+- C: Framer Motion on all pages, FRED on Dashboard
+- D: Sentiment analysis, pgvector, semantic search, glassmorphism UI
+- E: RAG system, AI Summary panel, rag_search tool
+- F: LangGraph multi-agent supervisor graph
 
-### Phase E: RAG System
-- Embeddings pipeline for events and headlines
-- Vector similarity search
-- Context builder for AI agent
-
-## Data Sources (5)
+## Data Sources (5 → 6)
 
 1. GDELT - Geopolitical events
 2. Yahoo Finance - Market prices (33 symbols)
 3. RSS Feeds - News headlines
 4. FRED - Economic indicators (6 series)
 5. Polymarket - Prediction market odds
+6. Kalshi - Event contracts + personal trades (planned)
 
-## Architecture Notes
+## Final Target Stack
 
-- Backend: FastAPI + SQLAlchemy + PostgreSQL
-- Frontend: React 19 + Vite + Tailwind + Recharts + Framer Motion
+- Backend: FastAPI + SQLAlchemy + PostgreSQL + pgvector
+- MCP Server: stdio transport, ~21 tools for Claude Desktop/Code
+- Notifications: Telegram bot for mobile alerts
 - Orchestration: Prefect
-- AI Agent: Claude API with 10 tools
+- No frontend, no Anthropic API key needed

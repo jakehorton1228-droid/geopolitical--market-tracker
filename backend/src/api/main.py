@@ -31,7 +31,6 @@ from src.api.routes import (
     correlation_router,
     patterns_router,
     predictions_router,
-    agent_router,
     indicators_router,
     headlines_router,
     prediction_markets_router,
@@ -154,7 +153,6 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(correlation_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
 app.include_router(predictions_router, prefix="/api")
-app.include_router(agent_router, prefix="/api")
 app.include_router(indicators_router, prefix="/api")
 app.include_router(headlines_router, prefix="/api")
 app.include_router(prediction_markets_router, prefix="/api")
@@ -187,7 +185,7 @@ def root():
             "indicators": "/api/indicators",
             "headlines": "/api/headlines",
             "prediction_markets": "/api/prediction-markets",
-            "agent": "/api/agent/chat",
+            "briefing": "/api/briefing",
             "health": "/health",
         },
     }

@@ -9,7 +9,7 @@
 # ============================================================================
 
 .PHONY: help up down start stop restart logs build clean migrate \
-        dev-api dev-frontend dev test lint \
+        dev-api dev test lint \
         ingest-events ingest-market ingest-all \
         pipeline prefect-logs
 
@@ -63,7 +63,6 @@ up: ## Start all services (database, API, frontend)
 	@$(MAKE) --no-print-directory _init-db
 	@echo ""
 	@echo "$(GREEN)Services ready!$(NC)"
-	@echo "  Frontend:   http://localhost:3000"
 	@echo "  API Docs:   http://localhost:8000/docs"
 	@echo "  Prefect UI: http://localhost:4200"
 	@echo "  Database:   localhost:5432"
@@ -141,16 +140,7 @@ dev-api: ## Run API locally (requires venv and running DB)
 	@echo "$(BLUE)Starting API in development mode...$(NC)"
 	$(ACTIVATE) uvicorn src.api.main:app --reload --port 8000
 
-dev-frontend: ## Run React frontend in dev mode
-	@echo "$(BLUE)Starting frontend in development mode...$(NC)"
-	cd frontend && npm run dev
-
-dev: ## Instructions for running both API and frontend locally
-	@echo "$(YELLOW)Run these commands in separate terminals:$(NC)"
-	@echo ""
-	@echo "  Terminal 1 (API):      make dev-api"
-	@echo "  Terminal 2 (Frontend): make dev-frontend"
-	@echo ""
+dev: dev-api ## Alias for dev-api
 
 # ============================================================================
 # DATA INGESTION
@@ -259,11 +249,6 @@ install: ## Install Python dependencies
 	@echo "$(BLUE)Installing dependencies...$(NC)"
 	pip install -r $(BACKEND)/requirements.txt
 	@echo "$(GREEN)Dependencies installed.$(NC)"
-
-install-frontend: ## Install frontend dependencies
-	@echo "$(BLUE)Installing frontend dependencies...$(NC)"
-	cd frontend && npm install --legacy-peer-deps
-	@echo "$(GREEN)Frontend dependencies installed.$(NC)"
 
 setup: ## Full setup: install deps, start DB, run migrations
 	@echo "$(BLUE)Running full setup...$(NC)"

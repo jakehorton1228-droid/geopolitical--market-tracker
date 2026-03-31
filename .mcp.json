@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "geomarket": {
+      "command": "docker",
+      "args": [
+        "compose", "exec", "-T", "api",
+        "python", "-m", "src.mcp_server"
+      ],
+      "cwd": "/Users/jakeh/projects/geopolitical--market-tracker"
+    }
+  }
+}

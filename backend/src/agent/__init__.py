@@ -1,1 +1,1 @@
-"""AI Agent module — Claude-powered geopolitical market analyst."""
+"""Tool definitions for MCP server and analysis functions."""

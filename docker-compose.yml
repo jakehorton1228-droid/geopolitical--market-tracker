@@ -9,12 +9,10 @@
 # SERVICES:
 #   - db:             PostgreSQL database (port 5432)
 #   - api:            FastAPI REST API (port 8000)
-#   - frontend:       React app via nginx (port 3000)
 #   - prefect-server: Prefect UI + API (port 4200)
 #   - prefect-worker: Runs scheduled daily pipeline
 #
 # ACCESS:
-#   - Frontend:    http://localhost:3000
 #   - API Docs:    http://localhost:8000/docs
 #   - Prefect UI:  http://localhost:4200
 
@@ -50,7 +48,6 @@ services:
     container_name: gmt-api
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PYTHONPATH: /app
     ports:
       - "8000:8000"
@@ -63,21 +60,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    restart: unless-stopped
-
-  # ===========================================================================
-  # REACT FRONTEND
-  # ===========================================================================
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: gmt-frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      api:
-        condition: service_healthy
     restart: unless-stopped
 
   # ===========================================================================
