@@ -1,26 +1,26 @@
 # Geopolitical Market Tracker
 
-A full-stack intelligence platform that fuses geopolitical events, financial markets, economic indicators, news headlines, and prediction market odds into a unified analytical dashboard. It surfaces historical patterns, computes correlations, predicts market direction using interpretable models, and provides an AI-powered analyst agent that can answer natural language questions about the data.
+A full-stack intelligence platform that fuses geopolitical events, financial markets, economic indicators, news headlines, and prediction market odds into a unified analytical dashboard. It surfaces historical patterns, computes correlations, predicts market direction using interpretable models, and provides AI-powered analyst agents that can answer natural language questions about the data.
 
 ## About This Project
 
 This is a personal project focused on building a complete full-stack system from scratch — React frontend, Python backend, PostgreSQL database, and an AI agent layer.
 
-**Skills practiced:**
+**Skills demonstrated:**
 - **Frontend**: React 19, Vite, Tailwind CSS, Recharts, Framer Motion, React Query, react-simple-maps
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Data Science**: Correlation analysis, logistic regression, anomaly detection, statistical testing
 - **Data Engineering**: ETL pipelines (5 data sources), database design, REST API design
-- **AI Engineering**: Claude API tool use, agentic loops, prompt engineering
+- **AI Engineering**: Claude API tool use, agentic loops, prompt engineering, RAG pipelines, LangGraph multi-agent orchestration
 - **DevOps**: Docker, Docker Compose, nginx, Prefect orchestration, Makefile automation
 
-**Built with Claude Code** — This project leverages [Claude Code](https://claude.com/claude-code) as an AI pair programmer.
+**Built with [Claude Code](https://claude.com/claude-code)** as an AI pair programmer.
 
 ## What It Does
 
 ### Pages
 
-- **Intelligence Briefing** *(planned)*: Flagship dashboard fusing all 5 data sources — FRED macro indicators, prediction market movers, fused event/price timeline, news headlines with sentiment, and a risk radar showing which countries/topics are heating up
+- **Intelligence Briefing**: Flagship dashboard fusing all 5 data sources — FRED macro indicators, prediction market movers, fused event/price timeline, news headlines with sentiment, risk radar, and AI-generated summary panel
 - **Dashboard**: Overview of event counts, tracked symbols, strongest correlations, FRED economic indicator strip with animated counters, and recent high-impact events table
 - **Prediction Markets**: Browse geopolitical prediction markets from Polymarket — probabilities, 24h volume, sortable table with expandable probability trend charts
 - **Correlation Explorer**: See how event metrics (conflict count, Goldstein scores, media mentions) correlate with market returns across 33 symbols. Includes rolling correlation timeseries with confidence intervals and a multi-symbol heatmap
@@ -29,21 +29,18 @@ This is a personal project focused on building a complete full-stack system from
 - **Signals**: Two levels of market direction prediction:
   - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time"
   - **Level 2 (Logistic Regression)**: "Based on today's event profile, probability of UP: 64%. Key drivers: Goldstein score, media coverage"
-- **AI Agent**: Chat interface powered by Claude that can query events, run correlations, analyze patterns, make predictions, and detect anomalies using natural language
-
-### Planned Capabilities
-
-- **Sentiment Analysis**: NLP sentiment scoring on news headlines using pgvector embeddings
-- **RAG System**: Vector similarity search over events and headlines for contextual AI responses
-- **Multi-Agent System**: LangGraph-orchestrated specialist agents (Collection, Analysis, Dissemination) with a supervisor graph that routes between them
-- **Automated Workflows**: Prefect-triggered daily briefings, anomaly alerts with conditional routing, and a user-defined watchlist system
-- **Real-Time Updates**: WebSocket streaming for live data, LangGraph streaming for agent chat, and a live-updating briefing page
-- **Human-in-the-Loop**: LangGraph `interrupt()` review gates on generated briefings and alerts before dissemination
-- **MCP Server**: Standardized Model Context Protocol interface exposing all intelligence tools for use by external AI systems
+- **AI Agent**: Chat interface powered by Claude with single-agent and multi-agent modes. Can query events, run correlations, analyze patterns, make predictions, and detect anomalies using natural language
 
 ### AI Agent
 
-The AI Agent is a Claude-powered analyst that uses tool use to call 10 internal analysis functions:
+The AI Agent is a Claude-powered analyst with 15 tools across two modes:
+
+**Single-Agent Mode** — One Claude instance with access to all 15 tools in a direct agentic loop.
+
+**Multi-Agent Mode (LangGraph)** — A supervisor graph routes between three specialist agents:
+- **Collection Agent** (8 tools) — Gathers raw data: events, market data, headlines, semantic search
+- **Analysis Agent** (6 tools) — Runs correlations, predictions, anomaly detection, sentiment analysis
+- **Dissemination Agent** (0 tools) — Synthesizes findings into a structured intelligence briefing
 
 | Tool | Description |
 |------|-------------|
@@ -57,14 +54,32 @@ The AI Agent is a Claude-powered analyst that uses tool use to call 10 internal 
 | `detect_anomalies` | Isolation Forest + Z-score anomaly detection |
 | `list_symbols` | All 33 tracked instruments |
 | `get_symbol_countries` | Country-symbol sensitivity mappings |
+| `get_headline_sentiment` | News headlines with FinBERT sentiment scores |
+| `get_sentiment_summary` | Aggregate sentiment statistics |
+| `search_similar_content` | Semantic vector search over headlines and events |
+| `rag_search` | RAG retrieval formatted as intelligence briefing |
 
-**Setup**: Set `ANTHROPIC_API_KEY` in `.env`. Without it, the rest of the app works normally — the agent endpoint returns a helpful 503 message.
-
-**Example questions**:
+**Example questions:**
 - "What are the top correlations for crude oil?"
 - "What happened in Russia this month?"
 - "Run a prediction for gold"
 - "Detect anomalies for SPY over the last 90 days"
+
+### RAG System
+
+The RAG pipeline provides contextual intelligence retrieval:
+- **Embeddings**: 384-dimensional vectors (all-MiniLM-L6-v2) stored in pgvector
+- **Retriever**: Cosine similarity search across headlines and events with distance thresholds
+- **Context Builder**: Formats retrieved documents into structured LLM context
+- **Briefing Context**: Multi-topic search across 5 geopolitical themes for situational awareness
+- **AI Summary Panel**: Claude-generated intelligence briefing on the Briefing page
+
+### Sentiment Analysis
+
+- FinBERT-based NLP scoring on news headlines (-1.0 to +1.0)
+- Sentiment labels (positive/negative/neutral) with distribution tracking
+- Daily sentiment trends and per-source breakdown
+- Glassmorphism UI overhaul with sentiment-colored indicators
 
 ### Animations
 
@@ -91,8 +106,8 @@ All pages use Framer Motion for polished UI transitions:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    React Frontend (Vite + Framer Motion)           │
-│  Dashboard │ Predictions │ Correlations │ Timeline │ Map           │
-│  Signals │ Agent Chat                                             │
+│  Dashboard │ Briefing │ Predictions │ Correlations │ Timeline     │
+│  Map │ Signals │ Agent Chat (Single + Multi-Agent)                │
 │  Recharts │ React Query │ Tailwind │ React Simple Maps            │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │ /api proxy (nginx)
@@ -105,26 +120,28 @@ All pages use Framer Motion for polished UI transitions:
 │  /api/briefing     │ /api/risk          │ /api/agent/chat          │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
-                ┌────────────────┼────────────────┐
-                ▼                ▼                 ▼
-┌────────────────────┐  ┌────────────────┐  ┌────────────────────┐
-│    PostgreSQL      │  │ Analysis Layer │  │    AI Agent        │
-│  Events            │  │ Correlation    │  │ Claude API         │
-│  MarketData        │  │ Hist. Patterns │  │ 10 tools           │
-│  NewsHeadlines     │  │ Logistic Reg.  │  │ Calls analysis     │
-│  EconomicIndicators│  │ Event Study    │  │ functions directly  │
-│  PredictionMarkets │  │ Anomaly Det.   │  │                    │
-│  CorrelationCache  │  └────────────────┘  └────────────────────┘
-│  AnalysisResults   │
-└────────────────────┘
+           ┌─────────────────────┼─────────────────────┐
+           ▼                     ▼                      ▼
+┌────────────────────┐  ┌────────────────┐  ┌────────────────────────┐
+│  PostgreSQL +      │  │ Analysis Layer │  │   AI Agent Layer       │
+│  pgvector          │  │ Correlation    │  │                        │
+│                    │  │ Hist. Patterns │  │ Single-Agent:          │
+│  Events            │  │ Logistic Reg.  │  │   Claude + 15 tools    │
+│  MarketData        │  │ Event Study    │  │                        │
+│  NewsHeadlines     │  │ Anomaly Det.   │  │ Multi-Agent (LangGraph)│
+│  EconomicIndicators│  │ Sentiment      │  │   Supervisor → 3       │
+│  PredictionMarkets │  │ (FinBERT)      │  │   specialist agents    │
+│  CorrelationCache  │  │                │  │                        │
+│  AnalysisResults   │  │ RAG Pipeline   │  │ RAG Context Builder    │
+│  Embeddings (384d) │  │ (pgvector)     │  │   → AI Summary Panel   │
+└────────────────────┘  └────────────────┘  └────────────────────────┘
 
 Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Prefect Orchestration                           │
 │  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →     │
-│                  Analysis                                         │
-│  Prefect UI: http://localhost:4200                                │
+│                  Sentiment → Embeddings → Analysis                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -229,12 +246,14 @@ make dev-frontend  # Terminal 2: React on localhost:3000
 | `/api/analysis/regression/{symbol}` | GET | OLS regression results |
 | `/api/analysis/event-study` | POST | Run cumulative abnormal return study |
 | `/api/analysis/anomalies/detect` | GET | Run anomaly detection for a symbol |
-| **Briefing** *(planned)* | | |
+| **Briefing** | | |
 | `/api/briefing/snapshot` | GET | Composite briefing data (indicators + movers + headlines + risk) |
-| **Risk** *(planned)* | | |
+| `/api/briefing/summary` | GET | AI-generated summary or raw RAG context |
+| **Risk** | | |
 | `/api/risk/heatmap` | GET | Country-level risk scoring with temporal trends |
 | **Agent** | | |
-| `/api/agent/chat` | POST | Chat with the AI analyst (requires ANTHROPIC_API_KEY) |
+| `/api/agent/chat` | POST | Chat with single-agent AI analyst |
+| `/api/agent/chat/multi` | POST | Chat with LangGraph multi-agent system |
 
 Full interactive docs at `http://localhost:8000/docs`.
 
@@ -242,17 +261,25 @@ Full interactive docs at `http://localhost:8000/docs`.
 
 ```
 geopolitical--market-tracker/
-├── backend/                            # Python backend
+├── backend/
 │   ├── src/
 │   │   ├── agent/                      # AI agent module
-│   │   │   ├── tools.py                # 10 tool definitions + execution dispatch
-│   │   │   └── service.py              # Claude API agentic loop
+│   │   │   ├── tools.py                # 15 tool definitions + execution dispatch
+│   │   │   ├── service.py              # Claude API single-agent agentic loop
+│   │   │   ├── graph.py                # LangGraph supervisor graph
+│   │   │   ├── nodes.py                # Collection, Analysis, Dissemination agents
+│   │   │   └── state.py                # Shared agent state schema
+│   │   ├── rag/                        # RAG pipeline
+│   │   │   ├── retriever.py            # pgvector similarity search
+│   │   │   └── context.py              # Context formatting for LLM
 │   │   ├── analysis/
 │   │   │   ├── correlation.py          # Pearson/Spearman correlation
-│   │   │   ├── historical_patterns.py  # Level 1: conditional probability
-│   │   │   ├── production_regression.py # OLS + Level 2: logistic regression
+│   │   │   ├── historical_patterns.py  # Conditional probability analysis
+│   │   │   ├── production_regression.py # OLS + logistic regression
 │   │   │   ├── production_event_study.py # Cumulative Abnormal Returns
-│   │   │   ├── production_anomaly.py   # Isolation Forest + Z-score anomalies
+│   │   │   ├── production_anomaly.py   # Isolation Forest + Z-score
+│   │   │   ├── sentiment.py            # FinBERT sentiment scoring
+│   │   │   ├── embeddings.py           # Sentence transformer embeddings
 │   │   │   ├── feature_engineering.py  # Shared data preparation
 │   │   │   └── logging_config.py       # Logging utilities
 │   │   ├── api/
@@ -260,7 +287,7 @@ geopolitical--market-tracker/
 │   │   │   ├── schemas.py              # Pydantic request/response models
 │   │   │   └── routes/                 # Routers (events, market, analysis,
 │   │   │                               #   correlation, patterns, predictions,
-│   │   │                               #   indicators, headlines,
+│   │   │                               #   indicators, headlines, briefing,
 │   │   │                               #   prediction_markets, agent)
 │   │   ├── db/                         # SQLAlchemy models + queries
 │   │   ├── config/                     # Settings, constants, symbol mappings
@@ -288,51 +315,19 @@ geopolitical--market-tracker/
 │       │   ├── cards/                  # MetricCard, PatternCard, PredictionCard
 │       │   └── shared/                 # SymbolSelector, DateRangePicker,
 │       │                               #   AnimatedNumber, Skeletons
-│       ├── pages/                      # Dashboard, PredictionMarkets,
-│       │                               #   CorrelationExplorer, EventTimeline,
-│       │                               #   WorldMapView, Signals, AgentChat
+│       ├── pages/                      # Dashboard, IntelligenceBriefing,
+│       │                               #   PredictionMarkets, CorrelationExplorer,
+│       │                               #   EventTimeline, WorldMapView, Signals,
+│       │                               #   AgentChat
 │       └── utils/                      # Constants, formatters, animation presets
 │
 ├── .env.example                        # Environment variable template
-├── docker-compose.yml                  # Services: db, api, frontend, prefect, worker, migrate
+├── docker-compose.yml                  # Services: db, api, frontend, prefect, worker
 ├── Dockerfile.frontend                 # Multi-stage: Node build → nginx
 ├── nginx.conf                          # SPA routing + API proxy
 ├── Makefile                            # Dev and deployment commands
 ├── SYMBOLS.md                          # Tracked symbols documentation
 └── README.md
-```
-
-## Makefile Commands
-
-```bash
-# Docker
-make start           # Start all services (alias: make up)
-make stop            # Stop all services (alias: make down)
-make build           # Rebuild images
-make logs            # View logs
-make status          # Service status
-make migrate         # Run database migrations
-
-# Development
-make dev-api         # Run API with hot reload
-make dev-frontend    # Run React dev server
-
-# Data
-make ingest-events   # Ingest GDELT events (7 days)
-make ingest-market   # Ingest market data (30 days)
-make ingest-all      # All sources
-
-# Pipeline
-make pipeline        # Run daily pipeline manually
-make prefect-logs    # View Prefect worker logs
-
-# Testing
-make test            # Run pytest
-
-# Setup
-make install         # Install Python deps
-make install-frontend # Install frontend deps
-make setup           # Full setup
 ```
 
 ## Tracked Symbols (33)
@@ -360,26 +355,22 @@ make setup           # Full setup
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `db` | 5432 | PostgreSQL 15 |
+| `db` | 5432 | PostgreSQL 15 + pgvector |
 | `api` | 8000 | FastAPI REST API |
 | `frontend` | 3000 | React app via nginx |
 | `prefect-server` | 4200 | Prefect UI + orchestration API |
 | `prefect-worker` | — | Runs scheduled daily pipeline |
 
-## Roadmap
+## Development Phases
 
 | Phase | Focus | Status |
 |-------|-------|--------|
 | A | Animation foundation, new API endpoints, Prediction Markets page | Done |
-| B | Intelligence Briefing v1 (5-panel layout, fused timeline, risk radar) | Planned |
+| B | Intelligence Briefing (6-panel layout, fused timeline, risk radar, AI summary) | Done |
 | C | Visual polish — Framer Motion on all pages, FRED cards on Dashboard | Done |
-| D | Sentiment analysis — pgvector, headline NLP, sentiment colors | Planned |
-| E | RAG system — embeddings pipeline, vector search, context builder | Planned |
-| F | Multi-agent — LangGraph, Collection/Analysis/Dissemination agents | Planned |
-| G | Automated workflows — daily briefings, anomaly alerts, watchlists | Planned |
-| H | Real-time — WebSockets, streaming agent chat, live briefing | Planned |
-| I | MCP server — standardized tool interface for external AI | Planned |
-| J | Testing and documentation | Planned |
+| D | Sentiment analysis — pgvector, headline NLP, semantic search, glassmorphism UI | Done |
+| E | RAG system — embeddings pipeline, vector search, context builder, AI Summary panel | Done |
+| F | Multi-agent — LangGraph supervisor graph, specialist agents, chat UI toggle | Done |
 
 ## License
 
