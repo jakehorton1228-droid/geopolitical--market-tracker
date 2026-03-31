@@ -1,0 +1,53 @@
+/** Date range picker with preset buttons (30D, 90D, 180D, 1Y, 5Y, 10Y) and manual inputs. */
+const PRESETS = [
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+  { label: '180D', days: 180 },
+  { label: '1Y', days: 365 },
+  { label: '5Y', days: 1825 },
+  { label: '10Y', days: 3650 },
+]
+
+function daysAgo(n) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().split('T')[0]
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0]
+}
+
+export default function DateRangePicker({ startDate, endDate, onStartChange, onEndChange }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex gap-1">
+        {PRESETS.map(({ label, days }) => (
+          <button
+            key={label}
+            onClick={() => {
+              onStartChange(daysAgo(days))
+              onEndChange(today())
+            }}
+            className="px-2 py-1 text-xs rounded bg-glass border border-transparent text-text-secondary hover:text-text-primary hover:border-glass-border backdrop-blur-sm transition-all"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <input
+        type="date"
+        value={startDate}
+        onChange={(e) => onStartChange(e.target.value)}
+        className="bg-glass border border-glass-border rounded px-2 py-1 text-xs text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 transition-all"
+      />
+      <span className="text-text-secondary text-xs">to</span>
+      <input
+        type="date"
+        value={endDate}
+        onChange={(e) => onEndChange(e.target.value)}
+        className="bg-glass border border-glass-border rounded px-2 py-1 text-xs text-text-primary backdrop-blur-xl focus:outline-none focus:border-accent-blue/50 transition-all"
+      />
+    </div>
+  )
+}

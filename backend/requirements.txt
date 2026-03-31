@@ -26,8 +26,9 @@ statsmodels>=0.14.0
 # Orchestration
 prefect>=3.0.0
 
-# MCP Server
-mcp>=1.0.0
+# AI Agent
+anthropic>=0.40.0
+langgraph>=1.1.0
 
 # NLP / Sentiment Analysis
 transformers>=4.40.0
