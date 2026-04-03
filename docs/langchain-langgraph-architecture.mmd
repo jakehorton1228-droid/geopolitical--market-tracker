@@ -1,0 +1,38 @@
+---
+title: LangChain vs LangGraph
+---
+
+graph LR
+    subgraph LangChain["LangChain — The Building Blocks"]
+        direction TB
+        PROMPTS[Prompt Templates]
+        MODELS[Chat Models<br/>Claude, GPT, etc.]
+        TOOLS[Tool Definitions<br/>+ Execution]
+        RETRIEVERS[Retrievers<br/>Vector Search, RAG]
+        PARSERS[Output Parsers<br/>Pydantic, JSON]
+
+        PROMPTS --> MODELS
+        MODELS --> TOOLS
+        MODELS --> PARSERS
+        RETRIEVERS --> PROMPTS
+    end
+
+    subgraph LangGraph["LangGraph — The Orchestration"]
+        direction TB
+        STATE[Shared State<br/>data flows between nodes]
+        NODES[Nodes<br/>each node is an agent or function]
+        EDGES[Edges<br/>routing logic between nodes]
+        LOOP[Cycles<br/>agents can loop back]
+
+        STATE --> NODES
+        NODES --> EDGES
+        EDGES --> LOOP
+        LOOP --> NODES
+    end
+
+    LangChain -- "each Node uses<br/>LangChain primitives<br/>internally" --> LangGraph
+
+    classDef lc fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef lg fill:#7c3aed,stroke:#6d28d9,color:#fff
+    class LangChain lc
+    class LangGraph lg

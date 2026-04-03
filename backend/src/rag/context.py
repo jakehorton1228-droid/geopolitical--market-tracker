@@ -14,7 +14,7 @@ WHY A SEPARATE MODULE:
 - Keeping them separate means we can change formatting without touching search logic
 
 CONTEXT FORMAT:
-    The context is structured as a markdown-like block that Claude can parse:
+    The context is structured as a markdown-like block that the LLM can parse:
 
     === RELEVANT INTELLIGENCE ===
 

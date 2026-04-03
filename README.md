@@ -11,7 +11,7 @@ This is a personal project focused on building a complete full-stack system from
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Data Science**: Correlation analysis, logistic regression, anomaly detection, statistical testing
 - **Data Engineering**: ETL pipelines (5 data sources), database design, REST API design
-- **AI Engineering**: Claude API tool use, agentic loops, prompt engineering, RAG pipelines, LangGraph multi-agent orchestration
+- **AI Engineering**: Local LLM inference (Ollama/Llama 3), LangGraph multi-agent orchestration, RAG pipelines, prompt engineering
 - **DevOps**: Docker, Docker Compose, nginx, Prefect orchestration, Makefile automation
 
 **Built with [Claude Code](https://claude.com/claude-code)** as an AI pair programmer.
@@ -29,13 +29,13 @@ This is a personal project focused on building a complete full-stack system from
 - **Signals**: Two levels of market direction prediction:
   - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time"
   - **Level 2 (Logistic Regression)**: "Based on today's event profile, probability of UP: 64%. Key drivers: Goldstein score, media coverage"
-- **AI Agent**: Chat interface powered by Claude with single-agent and multi-agent modes. Can query events, run correlations, analyze patterns, make predictions, and detect anomalies using natural language
+- **AI Agent**: Chat interface powered by a LangGraph multi-agent pipeline with local Llama model. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments
 
 ### AI Agent
 
 The AI Agent is a Claude-powered analyst with 15 tools across two modes:
 
-**Single-Agent Mode** — One Claude instance with access to all 15 tools in a direct agentic loop.
+**Intelligence Pipeline** — LangGraph orchestration with deterministic collection/analysis and local LLM synthesis.
 
 **Multi-Agent Mode (LangGraph)** — A supervisor graph routes between three specialist agents:
 - **Collection Agent** (8 tools) — Gathers raw data: events, market data, headlines, semantic search
@@ -125,13 +125,13 @@ All pages use Framer Motion for polished UI transitions:
 ┌────────────────────┐  ┌────────────────┐  ┌────────────────────────┐
 │  PostgreSQL +      │  │ Analysis Layer │  │   AI Agent Layer       │
 │  pgvector          │  │ Correlation    │  │                        │
-│                    │  │ Hist. Patterns │  │ Single-Agent:          │
-│  Events            │  │ Logistic Reg.  │  │   Claude + 15 tools    │
-│  MarketData        │  │ Event Study    │  │                        │
-│  NewsHeadlines     │  │ Anomaly Det.   │  │ Multi-Agent (LangGraph)│
-│  EconomicIndicators│  │ Sentiment      │  │   Supervisor → 3       │
-│  PredictionMarkets │  │ (FinBERT)      │  │   specialist agents    │
-│  CorrelationCache  │  │                │  │                        │
+│                    │  │ Hist. Patterns │  │ LangGraph Pipeline:    │
+│  Events            │  │ Logistic Reg.  │  │   Supervisor (rules)   │
+│  MarketData        │  │ Event Study    │  │   Collection (determ.) │
+│  NewsHeadlines     │  │ Anomaly Det.   │  │   Analysis (determ.)   │
+│  EconomicIndicators│  │ Sentiment      │  │   Dissemination (LLM)  │
+│  PredictionMarkets │  │ (FinBERT)      │  │                        │
+│  CorrelationCache  │  │                │  │ Llama 3 via Ollama     │
 │  AnalysisResults   │  │ RAG Pipeline   │  │ RAG Context Builder    │
 │  Embeddings (384d) │  │ (pgvector)     │  │   → AI Summary Panel   │
 └────────────────────┘  └────────────────┘  └────────────────────────┘
@@ -156,7 +156,7 @@ cd geopolitical--market-tracker
 # Copy .env.example and add your keys
 cp .env.example .env
 # Edit .env and set:
-#   ANTHROPIC_API_KEY=sk-ant-...  (for AI agent)
+#   OLLAMA_MODEL=llama3.1:8b  (local LLM for AI agent)
 #   FRED_API_KEY=...              (for economic indicators, free at fred.stlouisfed.org)
 
 # Start all services (database, API, frontend)
@@ -252,8 +252,7 @@ make dev-frontend  # Terminal 2: React on localhost:3000
 | **Risk** | | |
 | `/api/risk/heatmap` | GET | Country-level risk scoring with temporal trends |
 | **Agent** | | |
-| `/api/agent/chat` | POST | Chat with single-agent AI analyst |
-| `/api/agent/chat/multi` | POST | Chat with LangGraph multi-agent system |
+| `/api/agent/chat` | POST | Chat with LangGraph multi-agent intelligence pipeline |
 
 Full interactive docs at `http://localhost:8000/docs`.
 
@@ -265,7 +264,7 @@ geopolitical--market-tracker/
 │   ├── src/
 │   │   ├── agent/                      # AI agent module
 │   │   │   ├── tools.py                # 15 tool definitions + execution dispatch
-│   │   │   ├── service.py              # Claude API single-agent agentic loop
+│   │   │   ├── synthesis.py            # Shared Ollama client for LLM-powered assessments
 │   │   │   ├── graph.py                # LangGraph supervisor graph
 │   │   │   ├── nodes.py                # Collection, Analysis, Dissemination agents
 │   │   │   └── state.py                # Shared agent state schema

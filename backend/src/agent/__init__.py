@@ -1,1 +1,1 @@
-"""AI Agent module — Claude-powered geopolitical market analyst."""
+"""AI Agent module — LLM-powered geopolitical market analyst (Ollama/Llama 3)."""

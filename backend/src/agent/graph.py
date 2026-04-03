@@ -1,60 +1,49 @@
-"""LangGraph multi-agent graph — the Supervisor orchestration layer.
+"""LangGraph multi-agent graph — deterministic Supervisor orchestration.
 
 Wires Collection, Analysis, and Dissemination nodes into a directed
-graph with conditional routing. The Supervisor decides which agent
-runs next based on the current state.
+graph with conditional routing. The Supervisor uses deterministic
+state-based logic to decide which agent runs next — no LLM needed
+for routing decisions.
 
 Graph flow:
-  START → supervisor → collection → supervisor → analysis → supervisor
-        → dissemination → supervisor → END
+  START -> supervisor -> collection -> supervisor -> analysis -> supervisor
+        -> dissemination -> supervisor -> END
 """
 
 import logging
 
-import anthropic
 from langgraph.graph import StateGraph, END
 
-from src.config.settings import ANTHROPIC_API_KEY, AGENT_MODEL
 from src.agent.state import AgentState, CollectedData, AnalysisResults
 from src.agent.nodes import collection_node, analysis_node, dissemination_node
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Supervisor — the routing brain
+# Supervisor — deterministic routing based on state
 # ---------------------------------------------------------------------------
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _client
-
 
 def supervisor_node(state: AgentState) -> dict:
-    """Supervisor: decide which agent runs next.
+    """Supervisor: decide which agent runs next using deterministic logic.
 
-    Reads the current state and uses Claude to make a routing decision.
-    Returns a state update with `next_agent` set.
+    Rules:
+    - If no data collected yet -> collection
+    - If data collected but not analyzed -> analysis
+    - If analyzed but no final response -> dissemination
+    - If final response exists -> END
     """
     iteration = state.get("iteration", 0)
     max_iter = state.get("max_iterations", 10)
 
-    # Safety: if we've looped too many times, force end
     if iteration >= max_iter:
         logger.warning("Supervisor hit max iterations, forcing END")
         return {"next_agent": "END", "iteration": iteration + 1}
 
-    query = state.get("query", "")
     collected = state.get("collected_data", CollectedData())
     analysis = state.get("analysis_results", AnalysisResults())
     final = state.get("final_response", "")
-    current = state.get("current_agent", "supervisor")
 
-    # Build a concise status summary for the Supervisor's decision
     has_collection = bool(
         collected.events or collected.market_data
         or collected.headlines or collected.rag_context
@@ -65,45 +54,20 @@ def supervisor_node(state: AgentState) -> dict:
     )
     has_final = bool(final)
 
-    status = (
-        f"Query: {query}\n"
-        f"Current agent just finished: {current}\n"
-        f"Data collected: {'YES' if has_collection else 'NO'}\n"
-        f"Analysis done: {'YES' if has_analysis else 'NO'}\n"
-        f"Final response written: {'YES' if has_final else 'NO'}\n"
-        f"Iteration: {iteration}/{max_iter}"
-    )
-
-    # Use Claude to decide routing
-    client = _get_client()
-    response = client.messages.create(
-        model=AGENT_MODEL,
-        max_tokens=50,
-        system=(
-            "You are a routing supervisor for an intelligence analysis system. "
-            "Based on the current state, decide which agent should run next.\n\n"
-            "Rules:\n"
-            "- If no data has been collected yet, route to 'collection'\n"
-            "- If data is collected but not analyzed, route to 'analysis'\n"
-            "- If data is collected AND analyzed but no final response, route to 'dissemination'\n"
-            "- If a final response exists, route to 'END'\n\n"
-            "Respond with ONLY one word: collection, analysis, dissemination, or END"
-        ),
-        messages=[{"role": "user", "content": status}],
-    )
-
-    decision = response.content[0].text.strip().lower()
-
-    # Validate the decision
-    valid = {"collection", "analysis", "dissemination", "end", "END"}
-    if decision not in valid:
-        logger.warning(f"Supervisor returned invalid decision '{decision}', defaulting to END")
+    if has_final:
         decision = "END"
+    elif has_analysis:
+        decision = "dissemination"
+    elif has_collection:
+        decision = "analysis"
+    else:
+        decision = "collection"
 
-    # Normalize
-    decision = decision.upper() if decision.lower() == "end" else decision
-
-    logger.info(f"[Supervisor] Iteration {iteration}: {current} → {decision}")
+    logger.info(
+        f"[Supervisor] Iteration {iteration}: "
+        f"collected={has_collection}, analyzed={has_analysis}, "
+        f"final={has_final} -> {decision}"
+    )
 
     return {"next_agent": decision, "iteration": iteration + 1}
 

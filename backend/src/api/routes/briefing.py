@@ -10,10 +10,11 @@ USAGE:
 
 import logging
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query
 
-from src.config.settings import ANTHROPIC_API_KEY, AGENT_MODEL, AGENT_MAX_TOKENS
+from src.config.settings import OLLAMA_MODEL
 from src.rag.context import ContextBuilder
+from src.analysis.synthesis import generate_briefing, is_available
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,8 @@ def get_briefing_summary(
     Generate an AI situational awareness summary using RAG.
 
     1. Retrieves recent headlines and events across 5 geopolitical themes
-    2. Feeds them as context to Claude
+    2. Feeds them as context to a locally-hosted Llama model via Ollama
     3. Returns a structured intelligence briefing summary
-
-    Returns a pre-built RAG context if no API key is configured,
-    or a full AI-generated summary if the key is available.
     """
     builder = ContextBuilder()
     context = builder.build_briefing_context(days_back=days_back)
@@ -43,55 +41,17 @@ def get_briefing_summary(
             "source": "system",
         }
 
-    # If no API key, return the raw context as a structured summary
-    if not ANTHROPIC_API_KEY:
+    if not is_available():
         return {
             "summary": context,
             "source": "rag_context",
-            "note": "Set ANTHROPIC_API_KEY for AI-generated summaries.",
+            "note": "Ollama model not available. Showing raw RAG context.",
         }
 
-    # Generate AI summary using Claude
-    try:
-        import anthropic
+    summary = generate_briefing(context)
 
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-        response = client.messages.create(
-            model=AGENT_MODEL,
-            max_tokens=1024,
-            system=(
-                "You are an intelligence analyst writing a daily situational awareness briefing. "
-                "You have been given relevant headlines and events retrieved from a database. "
-                "Write a concise briefing (3-5 paragraphs) covering: "
-                "1) Top threats and conflicts, "
-                "2) Diplomatic developments, "
-                "3) Economic/market implications, "
-                "4) Key watchpoints for the next 24-48 hours. "
-                "Be factual, cite specific events from the context, and avoid speculation. "
-                "Write in a professional intelligence briefing style."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"Generate a situational awareness briefing based on this intelligence:\n\n{context}",
-                }
-            ],
-        )
-
-        summary = response.content[0].text
-
-        return {
-            "summary": summary,
-            "source": "ai_generated",
-            "model": AGENT_MODEL,
-        }
-
-    except Exception as e:
-        logger.error(f"AI summary generation failed: {e}")
-        # Fallback to raw context
-        return {
-            "summary": context,
-            "source": "rag_context_fallback",
-            "error": str(e),
-        }
+    return {
+        "summary": summary,
+        "source": "ai_generated",
+        "model": OLLAMA_MODEL,
+    }

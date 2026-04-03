@@ -1,0 +1,37 @@
+---
+title: GMIP — Your LangGraph Agent Flow
+---
+
+graph TD
+    START((Start)) --> SUP
+
+    SUP{Supervisor<br/>picks next agent}
+
+    SUP -- "need data" --> COLL
+    SUP -- "need analysis" --> ANAL
+    SUP -- "ready to write" --> DISS
+    SUP -- "done" --> END_NODE((End))
+
+    COLL[Collection Agent<br/>8 tools: events, markets,<br/>headlines, RAG search]
+    ANAL[Analysis Agent<br/>6 tools: correlations,<br/>patterns, anomalies]
+    DISS[Dissemination Agent<br/>no tools — synthesizes<br/>everything into briefing]
+
+    COLL -- "updates state" --> SUP
+    ANAL -- "updates state" --> SUP
+    DISS -- "updates state" --> SUP
+
+    STATE[/AgentState<br/>query + collected_data +<br/>analysis_results + final_response/]
+
+    COLL -. "reads & writes" .-> STATE
+    ANAL -. "reads & writes" .-> STATE
+    DISS -. "reads & writes" .-> STATE
+
+    classDef sup fill:#f59e0b,stroke:#d97706,color:#000
+    classDef agent fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef state fill:#1e293b,stroke:#334155,color:#e2e8f0
+    classDef endpoint fill:#ef4444,stroke:#dc2626,color:#fff
+
+    class SUP sup
+    class COLL,ANAL,DISS agent
+    class STATE state
+    class START,END_NODE endpoint

@@ -1,7 +1,8 @@
 """Agent tool definitions and execution dispatch.
 
-Each tool maps a Claude tool_use schema to an internal Python function.
-The agent calls these tools directly (no HTTP overhead).
+Each tool has a schema (name, description, input_schema) and maps to an
+internal Python function. Tools are called deterministically by the
+collection and analysis nodes — no LLM tool selection.
 """
 
 import json
@@ -37,7 +38,7 @@ from src.rag.context import ContextBuilder
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# TOOL SCHEMAS (Claude tool_use format)
+# TOOL SCHEMAS
 # =============================================================================
 
 TOOL_DEFINITIONS = [

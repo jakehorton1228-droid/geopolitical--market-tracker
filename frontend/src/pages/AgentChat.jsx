@@ -1,16 +1,16 @@
 /**
- * AI Agent Chat page — conversational interface to the Claude-powered analyst.
+ * AI Agent Chat page — conversational interface to the intelligence pipeline.
  *
  * Features:
  * - Full chat UI with user/assistant message bubbles
  * - Markdown rendering for agent responses (tables, lists, code blocks)
- * - Tool call chips showing which analysis tools the agent used
+ * - Agent pipeline chips showing which stages ran (collection, analysis, dissemination)
  * - Suggestion buttons for common questions
- * - Animated thinking indicator while agent processes
+ * - Animated thinking indicator while pipeline processes
  * - Auto-scroll to latest message
  *
- * The agent uses Claude's tool use capability to call 10 internal
- * analysis functions (events, correlations, patterns, predictions, anomalies).
+ * Uses the LangGraph multi-agent pipeline:
+ *   Collection (deterministic) -> Analysis (deterministic) -> Dissemination (Llama 3 via Ollama)
  */
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -26,25 +26,6 @@ const SUGGESTIONS = [
   'Detect anomalies for SPY over the last 90 days',
   'How does conflict affect natural gas?',
 ]
-
-function ToolChips({ tools }) {
-  if (!tools || tools.length === 0) return null
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {tools.map((t, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: i * 0.05, duration: 0.2 }}
-          className="text-[10px] bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded-full"
-        >
-          {t.tool}
-        </motion.span>
-      ))}
-    </div>
-  )
-}
 
 function AgentChips({ agents }) {
   if (!agents || agents.length === 0) return null
@@ -70,7 +51,7 @@ function AgentChips({ agents }) {
   )
 }
 
-function MessageBubble({ msg, index }) {
+function MessageBubble({ msg }) {
   const isUser = msg.role === 'user'
   const isError = msg.isError
 
@@ -97,14 +78,13 @@ function MessageBubble({ msg, index }) {
             <Markdown>{msg.content}</Markdown>
           </div>
         )}
-        {!isUser && <ToolChips tools={msg.tool_calls} />}
         {!isUser && <AgentChips agents={msg.agents_used} />}
       </div>
     </motion.div>
   )
 }
 
-function ThinkingIndicator({ multiAgent }) {
+function ThinkingIndicator() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -119,7 +99,7 @@ function ThinkingIndicator({ multiAgent }) {
             <span className="w-1.5 h-1.5 bg-accent-blue rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 bg-accent-blue rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-          {multiAgent ? 'Multi-agent pipeline running...' : 'Analyzing with tools...'}
+          Intelligence pipeline running...
         </div>
       </div>
     </motion.div>
@@ -127,13 +107,11 @@ function ThinkingIndicator({ multiAgent }) {
 }
 
 export default function AgentChat() {
-  const [multiAgent, setMultiAgent] = useState(false)
-  const { messages, isLoading, sendMessage, clearHistory } = useAgentChat(multiAgent)
+  const { messages, isLoading, sendMessage, clearHistory } = useAgentChat()
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
@@ -158,22 +136,10 @@ export default function AgentChat() {
         <div>
           <h2 className="text-2xl font-bold text-text-primary">AI Analyst</h2>
           <p className="text-sm text-text-secondary mt-0.5">
-            Claude-powered geopolitical market analysis
+            LangGraph intelligence pipeline with local Llama model
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Multi-agent toggle */}
-          <button
-            onClick={() => setMultiAgent(prev => !prev)}
-            disabled={isLoading}
-            className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary glass-panel px-3 py-1.5 transition-colors disabled:opacity-50"
-          >
-            <div className={`w-7 h-4 rounded-full transition-colors relative ${multiAgent ? 'bg-accent-blue' : 'bg-white/10'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${multiAgent ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-            </div>
-            {multiAgent ? 'Multi-Agent' : 'Single Agent'}
-          </button>
-
           {messages.length > 0 && (
             <motion.button
               initial={{ opacity: 0 }}
@@ -232,9 +198,9 @@ export default function AgentChat() {
           ) : (
             <>
               {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} index={i} />
+                <MessageBubble key={i} msg={msg} />
               ))}
-              {isLoading && <ThinkingIndicator multiAgent={multiAgent} />}
+              {isLoading && <ThinkingIndicator />}
             </>
           )}
         </AnimatePresence>

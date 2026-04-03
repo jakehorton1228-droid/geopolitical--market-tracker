@@ -69,10 +69,10 @@ POLYMARKET_EXCLUDE_TAGS = {
 }
 POLYMARKET_REQUEST_TIMEOUT = 30
 
-# AI Agent
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-AGENT_MODEL = "claude-sonnet-4-20250514"
-AGENT_MAX_TOKENS = 4096
+# LLM (Ollama — local inference)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_MAX_TOKENS = 4096
 
 # Analysis settings
 EVENT_STUDY_ESTIMATION_WINDOW = 30  # Days for baseline calculation

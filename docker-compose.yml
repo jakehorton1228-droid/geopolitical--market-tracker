@@ -50,12 +50,15 @@ services:
     container_name: gmt-api
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       PYTHONPATH: /app
     ports:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
@@ -108,6 +111,23 @@ services:
     restart: unless-stopped
 
   # ===========================================================================
+  # OLLAMA (local LLM inference)
+  # ===========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gmt-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================================================
   # DATABASE MIGRATIONS (run once then exit)
   # ===========================================================================
   migrate:
@@ -127,3 +147,5 @@ services:
 volumes:
   pgdata:
     name: gmt-pgdata
+  ollama_models:
+    name: gmt-ollama-models
