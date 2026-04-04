@@ -1,10 +1,16 @@
-"""Agent API route — multi-agent intelligence pipeline (LangGraph)."""
+"""Agent API route — multi-agent intelligence pipeline (LangGraph).
+
+When LANGCHAIN_TRACING_V2=true is set in the environment, every graph
+invocation is automatically traced to LangSmith — node executions,
+state transitions, and LLM calls are all visible in the dashboard.
+"""
 
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.analysis.synthesis import is_available
+from src.config.settings import LANGSMITH_TRACING_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +27,7 @@ class ChatResponse(BaseModel):
     response: str
     agents_used: list[str] = []
     iterations: int = 0
+    traced: bool = False
 
 
 def _check_ollama():
@@ -44,6 +51,9 @@ def agent_chat(req: ChatRequest):
 
     Collection and Analysis are deterministic. Dissemination uses
     a local Llama model via Ollama for synthesis.
+
+    When LangSmith tracing is enabled, the full execution trace
+    is logged automatically — visible at smith.langchain.com.
     """
     _check_ollama()
 
@@ -56,7 +66,16 @@ def agent_chat(req: ChatRequest):
             "query": req.message,
         }
 
-        result = intelligence_graph.invoke(initial_state)
+        # LangSmith tracing config — metadata attached to the trace
+        config = {
+            "metadata": {
+                "query": req.message,
+                "pipeline": "intelligence_graph",
+            },
+            "tags": ["gmip", "intelligence-pipeline"],
+        }
+
+        result = intelligence_graph.invoke(initial_state, config=config)
 
         agents_used = []
         for msg in result.get("messages", []):
@@ -70,6 +89,7 @@ def agent_chat(req: ChatRequest):
             response=result.get("final_response", "No response generated."),
             agents_used=agents_used,
             iterations=result.get("iteration", 0),
+            traced=LANGSMITH_TRACING_ENABLED,
         )
     except Exception as e:
         logger.exception("Agent chat error")

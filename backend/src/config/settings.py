@@ -74,6 +74,14 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 OLLAMA_MAX_TOKENS = 4096
 
+# LangSmith (LLM observability)
+# These env vars are read automatically by LangGraph/LangChain:
+#   LANGCHAIN_TRACING_V2=true  — enables tracing
+#   LANGCHAIN_API_KEY=...      — LangSmith API key
+#   LANGCHAIN_PROJECT=...      — project name in LangSmith dashboard
+LANGSMITH_TRACING_ENABLED = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "gmip-intelligence-pipeline")
+
 # MLflow (experiment tracking)
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "gmip-event-impact")
