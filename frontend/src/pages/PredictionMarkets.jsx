@@ -77,7 +77,9 @@ function MarketChart({ marketId }) {
               border: `1px solid ${COLORS.border}`,
               borderRadius: 8,
               fontSize: 12,
+              color: '#e2e8f0',
             }}
+            labelStyle={{ color: '#94a3b8' }}
             formatter={(v) => [`${v.toFixed(1)}%`, 'Probability']}
           />
           <Line

@@ -37,7 +37,12 @@ export default function TopCorrelationsBar({ data }) {
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value) => [value.toFixed(4), 'Correlation']}
+            labelStyle={{ color: '#e2e8f0' }}
+            itemStyle={{ color: '#e2e8f0' }}
+            formatter={(value) => [
+              <span style={{ color: '#e2e8f0' }}>{value.toFixed(4)}</span>,
+              <span style={{ color: '#e2e8f0' }}>Correlation</span>,
+            ]}
           />
           <Bar dataKey="correlation" radius={[0, 4, 4, 0]}>
             {chartData.map((entry, index) => (

@@ -11,7 +11,7 @@
 .PHONY: help up down start stop restart logs build clean migrate \
         dev-api dev-frontend dev test lint \
         ingest-events ingest-market ingest-all \
-        pipeline prefect-logs
+        pipeline prefect-logs train pull-model
 
 # Default target
 .DEFAULT_GOAL := help
@@ -66,15 +66,19 @@ up: ## Start all services (database, API, frontend)
 	@echo "  Frontend:   http://localhost:3000"
 	@echo "  API Docs:   http://localhost:8000/docs"
 	@echo "  Prefect UI: http://localhost:4200"
+	@echo "  MLflow UI:  http://localhost:5000"
+	@echo "  Ollama:     http://localhost:11434"
 	@echo "  Database:   localhost:5432"
+	@echo ""
+	@echo "$(YELLOW)If this is your first run, pull the LLM model:$(NC)"
+	@echo "  make pull-model"
 
 _init-db: ## (internal) Run migrations if needed
 	@echo "$(BLUE)Running database migrations...$(NC)"
-	@. venv/bin/activate && cd $(BACKEND) && alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied or venv not found$(NC)"
+	@docker exec gmt-api alembic upgrade head 2>/dev/null || echo "$(YELLOW)Migrations already applied$(NC)"
 	@EVENT_COUNT=$$(docker exec gmt-db psql -U postgres -d geopolitical_tracker -t -c "SELECT COUNT(*) FROM events;" 2>/dev/null | tr -d ' ' || echo "0"); \
 	if [ "$$EVENT_COUNT" = "0" ] || [ -z "$$EVENT_COUNT" ]; then \
-		echo "$(BLUE)No events found. Ingesting initial data...$(NC)"; \
-		$(MAKE) --no-print-directory ingest-all; \
+		echo "$(YELLOW)No events found. Run 'make ingest-all' to populate data.$(NC)"; \
 	else \
 		echo "$(GREEN)Database already has $$EVENT_COUNT events.$(NC)"; \
 	fi
@@ -133,6 +137,11 @@ up-api: ## Start database and API
 	docker compose up -d db api
 	@echo "$(GREEN)API started on http://localhost:8000$(NC)"
 
+pull-model: ## Pull Llama 3 model into Ollama
+	@echo "$(BLUE)Pulling Llama 3.1 8B model (this may take a few minutes)...$(NC)"
+	docker exec gmt-ollama ollama pull llama3.1:8b
+	@echo "$(GREEN)Model ready.$(NC)"
+
 # ============================================================================
 # LOCAL DEVELOPMENT (without Docker for API/frontend, DB via Docker)
 # ============================================================================
@@ -158,7 +167,7 @@ dev: ## Instructions for running both API and frontend locally
 
 ingest-events: ## Ingest GDELT events (last 7 days)
 	@echo "$(BLUE)Ingesting GDELT events...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.gdelt import GDELTIngestion; \
 g = GDELTIngestion(); \
@@ -168,7 +177,7 @@ g.ingest_date_range(date.today() - timedelta(days=7), date.today() - timedelta(d
 
 ingest-market: ## Ingest market data (last 30 days)
 	@echo "$(BLUE)Ingesting market data...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.market_data import MarketDataIngestion; \
 m = MarketDataIngestion(); \
@@ -178,7 +187,7 @@ m.ingest_all_symbols(date.today() - timedelta(days=30), date.today()); \
 
 ingest-headlines: ## Ingest RSS headlines (last 3 days)
 	@echo "$(BLUE)Ingesting RSS headlines...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from src.ingestion.rss_feeds import RSSIngestion; \
 r = RSSIngestion(); \
 r.ingest_all_feeds(); \
@@ -187,7 +196,7 @@ r.ingest_all_feeds(); \
 
 ingest-fred: ## Ingest FRED economic indicators
 	@echo "$(BLUE)Ingesting FRED indicators...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from src.ingestion.fred import FREDIngestion; \
 f = FREDIngestion(); \
 f.ingest_all_series(); \
@@ -196,7 +205,7 @@ f.ingest_all_series(); \
 
 ingest-polymarket: ## Ingest Polymarket prediction markets
 	@echo "$(BLUE)Ingesting Polymarket data...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from src.ingestion.polymarket import PolymarketIngestion; \
 p = PolymarketIngestion(); \
 p.ingest_markets(); \
@@ -208,7 +217,7 @@ ingest-all: ingest-events ingest-market ingest-headlines ingest-fred ingest-poly
 ingest-history: ## Ingest 1 year of historical data (events + market)
 	@echo "$(BLUE)Ingesting 1 year of historical data...$(NC)"
 	@echo "$(YELLOW)This may take 10-20 minutes...$(NC)"
-	$(ACTIVATE) python -c "\
+	docker exec gmt-api python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.gdelt import GDELTIngestion; \
 from src.ingestion.market_data import MarketDataIngestion; \
@@ -227,11 +236,22 @@ m.ingest_all_symbols(date.today() - timedelta(days=365), date.today(), skip_exis
 
 pipeline: ## Run the daily pipeline manually (ingestion + analysis)
 	@echo "$(BLUE)Running daily pipeline...$(NC)"
-	$(ACTIVATE) python -m flows.daily_pipeline
+	docker exec gmt-api python -m flows.daily_pipeline
 	@echo "$(GREEN)Pipeline complete.$(NC)"
+
+train: ## Train all ML models and log to MLflow
+	@echo "$(BLUE)Running model training pipeline...$(NC)"
+	docker exec gmt-api python -m flows.training_flow
+	@echo "$(GREEN)Training complete. View results at http://localhost:5000$(NC)"
 
 prefect-logs: ## View Prefect worker logs
 	docker compose logs -f prefect-worker
+
+logs-ollama: ## View Ollama logs
+	docker compose logs -f ollama
+
+logs-mlflow: ## View MLflow logs
+	docker compose logs -f mlflow
 
 # ============================================================================
 # TESTING & LINTING

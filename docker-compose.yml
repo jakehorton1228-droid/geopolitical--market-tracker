@@ -55,9 +55,11 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      FRED_API_KEY: ${FRED_API_KEY:-}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-gmip-intelligence-pipeline}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
       PYTHONPATH: /app
     ports:
       - "8000:8000"
@@ -129,10 +131,11 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   # ===========================================================================

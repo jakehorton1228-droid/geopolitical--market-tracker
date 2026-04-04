@@ -384,6 +384,7 @@ export default function IntelligenceBriefing() {
                     border: '1px solid #374151',
                     borderRadius: 8,
                     fontSize: 12,
+                    color: '#e2e8f0',
                   }}
                   labelStyle={{ color: '#9ca3af' }}
                   formatter={(value, name) => [

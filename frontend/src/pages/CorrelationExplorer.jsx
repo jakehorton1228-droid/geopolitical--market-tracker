@@ -148,7 +148,9 @@ export default function CorrelationExplorer() {
                     border: `1px solid ${COLORS.border}`,
                     borderRadius: 8,
                     fontSize: 12,
+                    color: '#e2e8f0',
                   }}
+                  labelStyle={{ color: '#94a3b8' }}
                 />
                 <Area dataKey="upper_ci" stroke="none" fill={COLORS.blue} fillOpacity={0.1} />
                 <Area dataKey="lower_ci" stroke="none" fill={COLORS.blue} fillOpacity={0.1} />

@@ -35,8 +35,9 @@ export default function PriceEventOverlay({ data, symbol }) {
               border: `1px solid ${COLORS.border}`,
               borderRadius: 8,
               fontSize: 12,
+              color: '#e2e8f0',
             }}
-            labelStyle={{ color: COLORS.gray }}
+            labelStyle={{ color: '#94a3b8' }}
             formatter={(value, name) => {
               if (name === 'close') return [`$${value.toFixed(2)}`, 'Price']
               return [value, name]
