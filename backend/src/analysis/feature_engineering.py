@@ -2,18 +2,19 @@
 Shared Feature Engineering Module.
 
 Centralizes the feature preparation logic used by all analysis modules:
-production_regression.py, production_anomaly.py, correlation.py,
-and historical_patterns.py.
+correlation.py, historical_patterns.py, production_regression.py,
+production_anomaly.py, and ml_features.py.
 
 This module provides a single FeatureEngineering class that handles:
 1. Fetching market and event data from the database
 2. Parsing CAMEO event codes into conflict/cooperation categories
-3. Aggregating events by date with configurable metrics
-4. Merging market and event data
+3. Aggregating events by date with configurable metrics (SQL-level)
+4. Merging market and event data on date
 5. Computing rolling statistics for time-series features
 
-Each analysis module can call the appropriate method to get exactly
-the features it needs without duplicating the ETL logic.
+Used directly by the statistical analysis modules for their specific
+feature needs, and as the foundation for ml_features.py which adds
+sentiment, temporal, and velocity features for ML model training.
 
 USAGE:
 ------
@@ -21,16 +22,16 @@ USAGE:
 
     fe = FeatureEngineering()
 
-    # For classification (binary target)
+    # For classification (binary target — logistic regression)
     X, y, names = fe.prepare_classification_features("SPY", start, end)
 
-    # For regression (continuous target)
+    # For regression (continuous target — OLS)
     X, y, names = fe.prepare_regression_features("SPY", start, end)
 
     # For anomaly detection (full DataFrame with rolling stats)
     df = fe.prepare_anomaly_features("SPY", start, end, lookback_days=30)
 
-    # Extended features (more Goldstein metrics + mentions_max)
+    # For gradient boosting (extended feature set)
     X, y, names = fe.prepare_extended_features("SPY", start, end)
 """
 

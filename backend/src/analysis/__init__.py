@@ -25,6 +25,11 @@ ANALYSES:
 5. Historical Patterns: "What happened historically?"
    - Conditional probability lookups
    - "When X happens, Y goes UP Z% of the time"
+
+6. ML Feature Pipeline: "Train models to predict market impact"
+   - Flat features for tree models (XGBoost, LightGBM, RF, LogReg, MLP)
+   - Windowed sequences for neural nets (CNN, LSTM)
+   - Time-series aware train/val/test split
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -59,6 +64,11 @@ from src.analysis.logging_config import (
     AnalysisTimer,
 )
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ML FEATURE PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════════
+from src.analysis.ml_features import MLFeaturePipeline
+
 __all__ = [
     # Event Study
     "ProductionEventStudy",
@@ -73,6 +83,8 @@ __all__ = [
     "ProdAnomaly",
     "AnomalyReport",
     "run_quick_anomaly_detection",
+    # ML Feature Pipeline
+    "MLFeaturePipeline",
     # Logging
     "setup_logging",
     "setup_debug_logging",

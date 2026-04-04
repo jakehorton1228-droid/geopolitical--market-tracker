@@ -1,30 +1,21 @@
 """
-Production Event Study Module using scipy and numpy.
+Event Study Module — measures market impact of geopolitical events.
 
-Event studies are a specialized finance technique, so there isn't a single
-"sklearn for event studies" package. However, we can still simplify our
-code significantly using scipy.stats for statistical tests.
+Uses scipy.stats for statistical significance testing of Cumulative
+Abnormal Returns (CAR). Given an event date and a symbol, determines
+whether the market moved more than expected during the event window.
 
-WHAT'S DIFFERENT FROM THE LEARNING VERSION:
--------------------------------------------
-Learning Version (event_study.py):
-- Manual CAR calculation (educational)
-- Manual t-statistic formula
-- Manual p-value from t-distribution
+HOW IT WORKS:
+1. Estimation window (30 days before event) — establishes "normal" returns
+2. Event window (1 day before to 5 days after) — measures actual returns
+3. Abnormal returns = actual - expected
+4. CAR = sum of abnormal returns over the event window
+5. t-test + Wilcoxon test for statistical significance
 
-Production Version (this file):
-- Uses scipy.stats.ttest_1samp for significance testing
-- Cleaner code structure
-- Additional statistical tests (Wilcoxon, bootstrap)
-- More robust confidence intervals
-
-INDUSTRY APPROACHES TO EVENT STUDIES:
-------------------------------------
-1. Basic: What we do - compare returns to estimation window mean
-2. Market Model: Adjust for overall market movements (beta)
-3. Fama-French: Adjust for size, value, momentum factors
-
-This module implements the basic approach with cleaner code.
+Called by:
+- API route: POST /api/analysis/event-study
+- Agent tool: run via scripts/run_analysis.py
+- Prefect flow: analysis_flow.py (batch processing)
 
 USAGE:
 ------
@@ -94,13 +85,12 @@ class ProdEventStudyResult:
 
 class ProductionEventStudy:
     """
-    Production event study using scipy.stats.
+    Event study analysis using scipy.stats.
 
-    Key improvements over learning version:
-    1. Uses scipy.stats.ttest_1samp for t-test
-    2. Adds Wilcoxon signed-rank test (non-parametric)
-    3. Calculates confidence intervals
-    4. Cleaner, more maintainable code
+    For a given event + symbol:
+    1. Computes CAR (Cumulative Abnormal Return)
+    2. Tests significance via t-test and Wilcoxon signed-rank
+    3. Provides 95% confidence intervals
     """
 
     def __init__(
@@ -145,11 +135,10 @@ class ProductionEventStudy:
         """
         Analyze a single event's impact on a symbol.
 
-        This is cleaner than the learning version but does the same thing:
-        1. Get estimation window returns → calculate "normal"
-        2. Get event window returns → calculate actual
+        1. Get estimation window returns -> calculate "normal" baseline
+        2. Get event window returns -> calculate actual
         3. Compute abnormal returns and CAR
-        4. Test significance using scipy.stats
+        4. Test significance via t-test and Wilcoxon
         """
         logger.info(f"Analyzing event {event_id} for {symbol} on {event_date}")
 

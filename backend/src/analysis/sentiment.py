@@ -1,22 +1,22 @@
 """
-Sentiment analysis for news headlines using HuggingFace transformers.
+Sentiment Module — FinBERT-based headline sentiment scoring.
 
-HOW IT WORKS:
--------------
-1. Load FinBERT (BERT fine-tuned on financial news) via HuggingFace pipeline
-2. Feed headline text through: tokenizer → transformer network → softmax → label
-3. Model outputs: label (positive/negative/neutral) + confidence score (0.0-1.0)
-4. We convert to our scale: -1.0 (very negative) to +1.0 (very positive)
+Uses ProsusAI/finbert (BERT fine-tuned on ~4,500 Reuters financial articles)
+to classify headlines as positive/negative/neutral with a confidence score.
 
-WHY THIS MODEL:
-- ProsusAI/finbert is trained on FINANCIAL NEWS — understands that "strikes" is negative
-  and "ceasefire" is positive in a geopolitical context (unlike SST-2 which is movie reviews)
-- 3 classes: positive, negative, neutral (SST-2 only has 2)
-- ~420MB, still fast on CPU for headline-length text
-- Based on BERT, fine-tuned on ~4,500 financial news articles from Reuters
+Output scale: -1.0 (very negative) to +1.0 (very positive).
+Stored in news_headlines.sentiment_score and sentiment_label columns.
+
+Model is lazy-loaded on first use (~420MB, runs on CPU).
+
+Called by:
+- Prefect flows: ingestion_flow.py (score new headlines after ingestion)
+- API route: POST /api/headlines/score
+- ML feature pipeline: ml_features.py (aggregated daily sentiment as features)
 
 USAGE:
-    analyzer = SentimentAnalyzer()  # Loads model once
+------
+    analyzer = SentimentAnalyzer()
     results = analyzer.analyze_batch(["Oil prices surge", "War breaks out"])
     # [SentimentResult(score=0.82, label='positive'), SentimentResult(score=-0.91, label='negative')]
 """

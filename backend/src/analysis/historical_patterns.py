@@ -1,8 +1,16 @@
 """
-Historical frequency analysis: "When X happens, Y goes UP Z% of the time."
+Historical Pattern Module — conditional probability analysis.
 
-This is Level 1 prediction -- pure conditional probability from historical data.
-No model training, just counting occurrences and computing statistics.
+"When X happens, Y goes UP Z% of the time."
+
+Pure frequency analysis from historical data — no model training.
+For each event type or country, counts how often the market went
+up vs down and tests significance via t-test.
+
+Called by:
+- API routes: GET /api/patterns/{symbol}
+- Agent tool: get_historical_patterns (tools.py)
+- Prefect flow: analysis_flow.py (daily pattern refresh for 8 key symbols)
 """
 
 from dataclasses import dataclass

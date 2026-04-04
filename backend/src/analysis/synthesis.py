@@ -1,12 +1,22 @@
-"""LLM synthesis layer — generates intelligence assessments from structured data.
+"""
+Synthesis Module — LLM-powered intelligence assessment generation.
 
-Uses a locally-hosted Llama model via Ollama to transform structured analysis
-results into readable intelligence briefings. This is the only LLM call in the
-pipeline — everything upstream is deterministic.
+Uses a locally-hosted Llama model via Ollama to transform structured
+analysis results into readable intelligence briefings. This is the only
+LLM call in the pipeline — everything upstream is deterministic.
 
 The model's job is synthesis, not analysis. It reads pre-computed results
-(correlations, anomalies, patterns, sentiment, events) and writes a structured
-assessment following a fixed intelligence product format.
+(correlations, anomalies, patterns, sentiment, events) and writes a
+structured assessment following a fixed intelligence product format.
+
+Two generation modes:
+- generate_assessment(): Full structured assessment (used by dissemination node)
+- generate_briefing(): Situational awareness summary (used by briefing API)
+
+Called by:
+- LangGraph pipeline: agent/nodes.py (dissemination_node)
+- API route: GET /api/briefing/summary (briefing.py)
+- API route: POST /api/agent/chat (agent.py — availability check)
 """
 
 import logging

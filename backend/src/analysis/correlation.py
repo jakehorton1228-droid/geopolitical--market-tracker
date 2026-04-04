@@ -1,10 +1,19 @@
 """
-Correlation analysis between geopolitical event features and market returns.
+Correlation Module — measures event-market statistical relationships.
 
 Provides:
 1. Point-in-time Pearson/Spearman correlation between event metrics and returns
 2. Rolling window correlation to see how relationships change over time
 3. Cross-symbol comparison to find the strongest event-market pairs
+
+Results are cached in the correlation_cache table by the daily Prefect
+pipeline for fast API response. The dashboard's Correlation Explorer page
+and heatmap visualization consume this data.
+
+Called by:
+- API routes: GET /api/correlations/{symbol}, /api/correlations/top, /api/correlations/heatmap
+- Agent tool: get_correlations, get_top_correlations (tools.py)
+- Prefect flow: analysis_flow.py (daily cache refresh)
 """
 
 from dataclasses import dataclass

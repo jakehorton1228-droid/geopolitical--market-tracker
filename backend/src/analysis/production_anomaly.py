@@ -1,47 +1,34 @@
 """
-Production Anomaly Detection Module using scikit-learn.
+Anomaly Detection Module — finds unusual market-event mismatches.
 
-This is the INDUSTRY-STANDARD way to do anomaly detection. It uses sklearn's
-IsolationForest and statistical methods for robust anomaly detection.
+Combines three detection methods to flag days where market behavior
+doesn't match geopolitical event activity:
 
-COMPARISON TO LEARNING VERSION:
--------------------------------
-Learning Version (anomaly_detection.py):
-- Manual Z-score calculation
-- Simple threshold-based detection
-- Rule-based unexplained move detection
-- Educational, shows the concepts
+1. Isolation Forest (sklearn) — unsupervised ML that isolates
+   observations requiring fewer random splits to separate.
+   Anomalies are "few and different" — easier to isolate.
 
-Production Version (this file):
-- sklearn's IsolationForest (unsupervised ML)
-- Multiple detection methods combined
-- More robust to outliers and edge cases
-- What you'd use in production
+2. Z-score analysis — statistical threshold on rolling return
+   distribution. Flags moves beyond 2 standard deviations.
 
-KEY SKLEARN CLASSES USED:
--------------------------
-- IsolationForest: Detects anomalies by isolating observations
-- StandardScaler: Normalizes features for consistent detection
-- LocalOutlierFactor: Alternative density-based detection
+3. Event-return mismatch — domain rules:
+   - Unexplained move: big return but no significant events
+   - Muted response: big event but small return
 
-HOW ISOLATION FOREST WORKS:
----------------------------
-1. Randomly select a feature and split point
-2. Recursively partition the data
-3. Anomalies are isolated in fewer splits (shorter path)
-4. Normal points require more splits (longer path)
+An observation is flagged if ANY method detects it.
 
-Intuition: Anomalies are "few and different" - they're easier to isolate.
+Called by:
+- API route: GET /api/analysis/anomalies/detect
+- Agent tool: detect_anomalies (tools.py)
+- Prefect flow: analysis_flow.py
 
 USAGE:
 ------
     from src.analysis.production_anomaly import ProductionAnomalyDetector
 
     detector = ProductionAnomalyDetector()
-    anomalies = detector.detect_all(symbol, start_date, end_date)
-
-    # Get detailed report
-    report = detector.get_anomaly_report(anomalies)
+    anomalies = detector.detect_all("CL=F", start_date, end_date)
+    report = detector.get_anomaly_report(anomalies, "CL=F", start_date, end_date)
 """
 
 from dataclasses import dataclass
@@ -117,12 +104,7 @@ class AnomalyReport:
 
 class ProductionAnomalyDetector:
     """
-    Production-ready anomaly detector using scikit-learn.
-
-    Combines multiple detection methods:
-    1. Isolation Forest (unsupervised ML)
-    2. Z-score analysis (statistical)
-    3. Event-return mismatch (domain knowledge)
+    Anomaly detector combining Isolation Forest, Z-score, and domain rules.
 
     An observation is flagged as anomalous if ANY method detects it,
     with the anomaly_probability reflecting confidence.

@@ -1,31 +1,29 @@
 """
-Embedding generation for headlines and events using sentence-transformers.
+Embedding Module — generates 384-dim vectors for semantic search.
 
-HOW IT WORKS:
--------------
-1. Load all-MiniLM-L6-v2 model (~80MB, runs locally, no API key)
-2. Feed text through: tokenizer → transformer → mean pooling → 384-dim vector
-3. Store the vector in the `embedding` column (pgvector type)
-4. Later, use cosine distance (<=> in SQL) to find semantically similar rows
+Uses all-MiniLM-L6-v2 (sentence-transformers, ~80MB, runs on CPU) to
+convert text into dense vectors stored in pgvector columns. Cosine
+distance (<=> in SQL) enables "find content similar in meaning to X"
+without needing exact keyword matches.
 
-WHY EMBEDDINGS:
-- Sentiment tells you HOW a headline feels (positive/negative)
-- Embeddings tell you WHAT it's about (meaning as a 384-number vector)
-- "Russian troops advance" and "Moscow military offensive" have different words
-  but nearly identical embeddings — they mean the same thing
-- This powers semantic search: "find headlines about nuclear escalation"
-  without needing the exact words "nuclear" or "escalation"
+Two embedding targets:
+- Headlines: embedded directly from headline text
+- Events: composed from structured fields (actors, location, Goldstein score)
+  via _event_to_text() since events don't have a single text field
 
-WHY THIS MODEL:
-- all-MiniLM-L6-v2: optimized for semantic similarity of short texts
-- 384 dimensions (small, fast) vs 768+ for larger models
-- ~80MB download, fast inference on CPU
-- Trained on 1B+ sentence pairs — excellent general-purpose embeddings
+Stored in: events.embedding and news_headlines.embedding (Vector 384)
+Used by: RAG retriever (rag/retriever.py), agent tool search_similar_content
+
+Called by:
+- Prefect flows: ingestion_flow.py (embed new headlines + events after ingestion)
+- Agent tool: search_similar_content (tools.py)
+- RAG retriever: rag/retriever.py (query embedding for similarity search)
 
 USAGE:
+------
     generator = EmbeddingGenerator()
     vectors = generator.encode(["Oil prices surge", "War breaks out in Syria"])
-    # [array(384,), array(384,)] — each is a 384-dim numpy array
+    # [array(384,), array(384,)]
 """
 
 import logging

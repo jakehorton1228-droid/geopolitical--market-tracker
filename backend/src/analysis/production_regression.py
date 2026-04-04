@@ -1,43 +1,33 @@
 """
-Production Regression Module using statsmodels.
+Regression Module — quantifies event-market relationships using statsmodels.
 
-This is the INDUSTRY-STANDARD way to do regression analysis, especially
-when you need statistical inference (p-values, confidence intervals).
+Two analysis modes:
 
-WHY STATSMODELS OVER SKLEARN FOR REGRESSION?
---------------------------------------------
-sklearn's LinearRegression:
-- Great for predictions
-- Does NOT give p-values, t-stats, confidence intervals
-- Used when you just want to predict
+1. OLS Regression (ProductionRegression):
+   - Continuous target (log returns)
+   - Outputs: coefficients, p-values, confidence intervals, R², F-stat
+   - Used for understanding which event features drive returns
+   - statsmodels gives full statistical inference (vs sklearn which only predicts)
 
-statsmodels OLS:
-- Gives FULL statistical output (like academic papers)
-- P-values, t-stats, confidence intervals, F-test
-- Used when you want to understand relationships
-- What economists, researchers, and analysts use
+2. Logistic Regression (LogisticRegressionAnalyzer):
+   - Binary target (UP/DOWN market direction)
+   - sklearn LogisticRegression with cross-validated accuracy
+   - Outputs: direction prediction, probability, feature contributions
+   - Used by the agent tool run_prediction and the Signals dashboard page
 
-COMPARISON TO LEARNING VERSION:
--------------------------------
-Learning Version (regression.py):
-- 400+ lines of code
-- Manual matrix math: β = (XᵀX)⁻¹Xᵀy
-- Manual R², t-stats, p-values
-- Educational
-
-Production Version (this file):
-- ~100 lines of code
-- model.fit() does everything
-- model.summary() gives beautiful output
-- What you'd use in a research paper or at work
+Called by:
+- API routes: GET /api/predictions/{symbol}, GET /api/analysis/regression/{symbol}
+- Agent tool: run_prediction (tools.py)
 
 USAGE:
 ------
     from src.analysis.production_regression import ProductionRegression
-
-    reg = ProductionRegression()
     result = reg.analyze("CL=F", start_date, end_date)
-    print(result.summary)  # Full statistical report
+    print(result.summary)
+
+    from src.analysis.production_regression import LogisticRegressionAnalyzer
+    analyzer = LogisticRegressionAnalyzer()
+    prediction = analyzer.train_and_predict("CL=F", start, end, current_features)
 """
 
 from dataclasses import dataclass
@@ -85,18 +75,11 @@ class ProdRegressionResult:
 
 class ProductionRegression:
     """
-    Production regression analysis using statsmodels.
+    OLS regression analysis using statsmodels.
 
-    statsmodels gives us everything we calculated manually:
-    - Coefficients
-    - Standard errors
-    - T-statistics
-    - P-values
-    - Confidence intervals
-    - R-squared
-    - F-statistic
-
-    All in one line: model = sm.OLS(y, X).fit()
+    Quantifies the linear relationship between event features
+    (Goldstein scale, mention count, tone, conflict count) and
+    market log returns. Full statistical inference output.
     """
 
     def __init__(self):
@@ -128,10 +111,10 @@ class ProductionRegression:
         features: list[str] = None,
     ) -> Optional[ProdRegressionResult]:
         """
-        Run regression analysis using statsmodels.
+        Run OLS regression: event features -> market returns.
 
-        This is the key method. Notice how simple it is compared to
-        our manual implementation!
+        Returns full statistical output including coefficients,
+        p-values, confidence intervals, and R².
         """
         logger.info(f"Running production regression for {symbol}")
 
@@ -144,20 +127,11 @@ class ProductionRegression:
 
         self.feature_names = feature_names
 
-        # ═══════════════════════════════════════════════════════════
-        # THIS IS WHERE STATSMODELS SHINES
-        # One line does everything we did manually!
-        # ═══════════════════════════════════════════════════════════
-
-        # Add constant (intercept) - statsmodels requires this explicitly
+        # Add constant (intercept) — statsmodels requires this explicitly
         X_with_const = sm.add_constant(X)
 
-        # Fit the model - this does all the matrix math internally
+        # Fit OLS model
         model = sm.OLS(y, X_with_const).fit()
-
-        # ═══════════════════════════════════════════════════════════
-        # EXTRACT ALL THE STATISTICS
-        # ═══════════════════════════════════════════════════════════
 
         all_names = ['const'] + feature_names
 
@@ -294,7 +268,7 @@ def print_interpretation(result: ProdRegressionResult) -> None:
 
 
 # =============================================================================
-# LOGISTIC REGRESSION (Level 2 Prediction)
+# LOGISTIC REGRESSION — Binary market direction prediction
 # =============================================================================
 
 @dataclass

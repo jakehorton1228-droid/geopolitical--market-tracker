@@ -74,6 +74,10 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 OLLAMA_MAX_TOKENS = 4096
 
+# MLflow (experiment tracking)
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "gmip-event-impact")
+
 # Analysis settings
 EVENT_STUDY_ESTIMATION_WINDOW = 30  # Days for baseline calculation
 EVENT_STUDY_EVENT_WINDOW_BEFORE = 1  # Days before event
