@@ -35,6 +35,157 @@ function accuracyColor(acc) {
   return 'text-accent-red'
 }
 
+/** Summary panel for the champion ML model (loaded from MLflow). */
+function ChampionSummary({ summary, symbol }) {
+  const featureNames = summary.feature_names || []
+  return (
+    <div className="glass-panel p-4 border-gradient-top">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="section-label">
+          Model Summary — {symbol}
+        </h3>
+        <span className="text-[10px] text-text-secondary">
+          Champion v{summary.version} · trained across all symbols
+        </span>
+      </div>
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"
+        variants={staggerContainer.variants}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Model Type</p>
+          <p className="text-lg font-bold capitalize">{summary.model_name?.replace(/_/g, ' ')}</p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Winner of 6-model bake-off</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Test AUC</p>
+          <p className="text-lg font-bold text-accent-green">
+            {summary.auc != null ? summary.auc.toFixed(3) : '—'}
+          </p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Higher is better (random = 0.5)</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Features</p>
+          <p className="text-lg font-bold">{summary.n_features ?? featureNames.length}</p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Engineered input signals</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Version</p>
+          <p className="text-lg font-bold">v{summary.version}</p>
+          <p className="text-[10px] text-text-secondary mt-0.5">From MLflow Model Registry</p>
+        </motion.div>
+      </motion.div>
+
+      {featureNames.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs text-text-secondary mb-2">
+            Input features ({featureNames.length} total)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {featureNames.map((name) => (
+              <span
+                key={name}
+                className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent-blue/10 text-accent-blue"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {summary.note && (
+        <p className="text-[11px] text-text-secondary mt-4 italic">{summary.note}</p>
+      )}
+    </div>
+  )
+}
+
+/** Summary panel for the legacy logistic regression model (trained on demand). */
+function LegacySummary({ summary, symbol, startDate, endDate }) {
+  return (
+    <div className="glass-panel p-4 border-gradient-top">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="section-label">
+          Model Summary — {symbol}
+        </h3>
+        <span className="text-[10px] text-text-secondary">
+          Trained on {startDate} to {endDate}
+        </span>
+      </div>
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"
+        variants={staggerContainer.variants}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Accuracy</p>
+          <p className={`text-lg font-bold ${accuracyColor(summary.accuracy ?? 0)}`}>
+            {summary.accuracy != null ? `${(summary.accuracy * 100).toFixed(1)}%` : '—'}
+          </p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Baseline (random): 50%</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Training Samples</p>
+          <p className="text-lg font-bold">
+            {summary.n_training_samples != null ? summary.n_training_samples.toLocaleString() : '—'}
+          </p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Days with events + market data</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">UP Ratio</p>
+          <p className="text-lg font-bold">
+            {summary.up_ratio != null ? `${(summary.up_ratio * 100).toFixed(0)}%` : '—'}
+          </p>
+          <p className="text-[10px] text-text-secondary mt-0.5">% of days market went up</p>
+        </motion.div>
+        <motion.div variants={staggerItem.variants} className="glass-inner p-2">
+          <p className="text-text-secondary">Accuracy Std</p>
+          <p className="text-lg font-bold">
+            {summary.accuracy_std != null ? `${(summary.accuracy_std * 100).toFixed(1)}%` : '—'}
+          </p>
+          <p className="text-[10px] text-text-secondary mt-0.5">Variation across 5 CV folds</p>
+        </motion.div>
+      </motion.div>
+
+      {summary.feature_importance && (
+        <div className="mt-3">
+          <p className="text-xs text-text-secondary mb-2">Feature Importance (|coefficient|)</p>
+          <div className="space-y-1">
+            {Object.entries(summary.feature_importance).map(([name, val], i) => (
+              <motion.div
+                key={name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05, duration: 0.3 }}
+                className="flex items-center gap-2 text-xs"
+              >
+                <span className="text-text-secondary w-32 shrink-0">
+                  {name.replace(/_/g, ' ')}
+                </span>
+                <div className="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-accent-blue rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(val * 100, 100)}%` }}
+                    transition={{ delay: 0.3 + i * 0.05, duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+                <span className="font-mono text-text-secondary w-12 text-right">
+                  {val.toFixed(3)}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Badge showing which model is serving predictions + link to MLflow. */
 function ActiveModelCard({ summary }) {
   const modelName = summary?.model_name || 'Logistic Regression'
@@ -206,8 +357,14 @@ export default function Signals() {
           </span>
           <span className="text-border">|</span>
           <span>
-            <span className="text-text-primary font-medium">Training Samples:</span>{' '}
-            {modelSummary ? modelSummary.n_training_samples.toLocaleString() : '—'} trading days
+            <span className="text-text-primary font-medium">
+              {modelSummary?.model_source === 'champion' ? 'Features:' : 'Training Samples:'}
+            </span>{' '}
+            {modelSummary?.model_source === 'champion'
+              ? `${modelSummary.n_features ?? '—'} engineered features`
+              : modelSummary?.n_training_samples != null
+                ? `${modelSummary.n_training_samples.toLocaleString()} trading days`
+                : '—'}
           </span>
           <span className="text-border">|</span>
           <span>
@@ -242,77 +399,9 @@ export default function Signals() {
         {summaryLoading ? (
           <LoadingSpinner message="Loading model summary..." />
         ) : modelSummary ? (
-          <div className="glass-panel p-4 border-gradient-top">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="section-label">
-                Model Summary — {symbol}
-              </h3>
-              <span className="text-[10px] text-text-secondary">
-                Trained on {startDate} to {endDate}
-              </span>
-            </div>
-            <motion.div
-              className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"
-              variants={staggerContainer.variants}
-              initial="initial"
-              animate="animate"
-            >
-              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
-                <p className="text-text-secondary">Accuracy</p>
-                <p className={`text-lg font-bold ${accuracyColor(modelSummary.accuracy)}`}>
-                  {(modelSummary.accuracy * 100).toFixed(1)}%
-                </p>
-                <p className="text-[10px] text-text-secondary mt-0.5">Baseline (random): 50%</p>
-              </motion.div>
-              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
-                <p className="text-text-secondary">Training Samples</p>
-                <p className="text-lg font-bold">{modelSummary.n_training_samples.toLocaleString()}</p>
-                <p className="text-[10px] text-text-secondary mt-0.5">Days with events + market data</p>
-              </motion.div>
-              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
-                <p className="text-text-secondary">UP Ratio</p>
-                <p className="text-lg font-bold">{(modelSummary.up_ratio * 100).toFixed(0)}%</p>
-                <p className="text-[10px] text-text-secondary mt-0.5">% of days market went up</p>
-              </motion.div>
-              <motion.div variants={staggerItem.variants} className="glass-inner p-2">
-                <p className="text-text-secondary">Accuracy Std</p>
-                <p className="text-lg font-bold">{(modelSummary.accuracy_std * 100).toFixed(1)}%</p>
-                <p className="text-[10px] text-text-secondary mt-0.5">Variation across 5 CV folds</p>
-              </motion.div>
-            </motion.div>
-
-            {modelSummary.feature_importance && (
-              <div className="mt-3">
-                <p className="text-xs text-text-secondary mb-2">Feature Importance (|coefficient|)</p>
-                <div className="space-y-1">
-                  {Object.entries(modelSummary.feature_importance).map(([name, val], i) => (
-                    <motion.div
-                      key={name}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.3 }}
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <span className="text-text-secondary w-32 shrink-0">
-                        {name.replace(/_/g, ' ')}
-                      </span>
-                      <div className="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
-                        <motion.div
-                          className="h-full bg-accent-blue rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(val * 100, 100)}%` }}
-                          transition={{ delay: 0.3 + i * 0.05, duration: 0.6, ease: 'easeOut' }}
-                        />
-                      </div>
-                      <span className="font-mono text-text-secondary w-12 text-right">
-                        {val.toFixed(3)}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          modelSummary.model_source === 'champion'
+            ? <ChampionSummary summary={modelSummary} symbol={symbol} />
+            : <LegacySummary summary={modelSummary} symbol={symbol} startDate={startDate} endDate={endDate} />
         ) : null}
       </motion.div>
 
