@@ -12,14 +12,19 @@
 #   - frontend:       React app via nginx (port 3000)
 #   - prefect-server: Prefect UI + API (port 4200)
 #   - prefect-worker: Runs scheduled daily pipeline
-#   - ollama:         Local LLM inference (port 11434)
 #   - mlflow:         ML experiment tracking UI (port 5000)
+#
+# OLLAMA (LLM):
+#   Runs natively on the host (NOT in Docker) so it can use Metal GPU
+#   acceleration on Apple Silicon. Docker containers reach it via
+#   http://host.docker.internal:11434. See README for setup.
 #
 # ACCESS:
 #   - Frontend:    http://localhost:3000
 #   - API Docs:    http://localhost:8000/docs
 #   - Prefect UI:  http://localhost:4200
 #   - MLflow UI:   http://localhost:5000
+#   - Ollama:      http://localhost:11434 (native, not Docker)
 
 services:
   # ===========================================================================
@@ -53,7 +58,9 @@ services:
     container_name: gmt-api
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
-      OLLAMA_BASE_URL: http://ollama:11434
+      # Ollama runs natively on the host for Metal GPU acceleration on Apple Silicon.
+      # host.docker.internal resolves to the host machine from inside Docker.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:26b}
       FRED_API_KEY: ${FRED_API_KEY:-}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
@@ -63,10 +70,10 @@ services:
       PYTHONPATH: /app
     ports:
       - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
@@ -112,30 +119,16 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
       PREFECT_API_URL: http://prefect-server:4200/api
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:26b}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       PYTHONPATH: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - prefect-server
       - db
       - mlflow
-    restart: unless-stopped
-
-  # ===========================================================================
-  # OLLAMA (local LLM inference)
-  # ===========================================================================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: gmt-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_models:/root/.ollama
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 15s
     restart: unless-stopped
 
   # ===========================================================================
@@ -176,7 +169,5 @@ services:
 volumes:
   pgdata:
     name: gmt-pgdata
-  ollama_models:
-    name: gmt-ollama-models
   mlflow_data:
     name: gmt-mlflow-data

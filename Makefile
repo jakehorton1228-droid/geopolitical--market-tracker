@@ -67,10 +67,12 @@ up: ## Start all services (database, API, frontend)
 	@echo "  API Docs:   http://localhost:8000/docs"
 	@echo "  Prefect UI: http://localhost:4200"
 	@echo "  MLflow UI:  http://localhost:5000"
-	@echo "  Ollama:     http://localhost:11434"
 	@echo "  Database:   localhost:5432"
 	@echo ""
-	@echo "$(YELLOW)If this is your first run, pull the LLM model:$(NC)"
+	@echo "$(YELLOW)Don't forget to start native Ollama in another terminal:$(NC)"
+	@echo "  make ollama-serve"
+	@echo ""
+	@echo "$(YELLOW)First run? Pull the model:$(NC)"
 	@echo "  make pull-model"
 
 _init-db: ## (internal) Run migrations if needed
@@ -137,10 +139,16 @@ up-api: ## Start database and API
 	docker compose up -d db api
 	@echo "$(GREEN)API started on http://localhost:8000$(NC)"
 
-pull-model: ## Pull Gemma 4 model into Ollama
+pull-model: ## Pull Gemma 4 model into native Ollama (requires ollama installed on host)
 	@echo "$(BLUE)Pulling Gemma 4 26B MoE model (~18GB, this may take several minutes)...$(NC)"
-	docker exec gmt-ollama ollama pull gemma4:26b
+	@command -v ollama >/dev/null 2>&1 || { echo "$(RED)Ollama not installed. Run: brew install ollama$(NC)"; exit 1; }
+	ollama pull gemma4:26b
 	@echo "$(GREEN)Model ready.$(NC)"
+
+ollama-serve: ## Start native Ollama server (run this in a separate terminal)
+	@echo "$(BLUE)Starting native Ollama server (uses Metal GPU on Apple Silicon)...$(NC)"
+	@command -v ollama >/dev/null 2>&1 || { echo "$(RED)Ollama not installed. Run: brew install ollama$(NC)"; exit 1; }
+	ollama serve
 
 # ============================================================================
 # LOCAL DEVELOPMENT (without Docker for API/frontend, DB via Docker)
@@ -212,23 +220,61 @@ p.ingest_markets(); \
 "
 	@echo "$(GREEN)Polymarket ingestion complete.$(NC)"
 
-ingest-all: ingest-events ingest-market ingest-headlines ingest-fred ingest-polymarket ## Ingest all 5 data sources
+post-ingest: ## Run sentiment scoring and embedding generation on new data
+	@echo "$(BLUE)Scoring sentiment and generating embeddings...$(NC)"
+	docker exec gmt-api python -c "\
+from src.db.connection import get_session; \
+from src.analysis.sentiment import score_unprocessed_headlines; \
+from src.analysis.embeddings import embed_unprocessed_headlines, embed_unprocessed_events; \
+session = get_session().__enter__(); \
+s = score_unprocessed_headlines(session); \
+h = embed_unprocessed_headlines(session); \
+e = embed_unprocessed_events(session); \
+print(f'Scored {s} headlines, embedded {h} headlines, embedded {e} events'); \
+"
+	@echo "$(GREEN)NLP processing complete.$(NC)"
 
-ingest-history: ## Ingest 1 year of historical data (events + market)
-	@echo "$(BLUE)Ingesting 1 year of historical data...$(NC)"
-	@echo "$(YELLOW)This may take 10-20 minutes...$(NC)"
+ingest-all: ingest-events ingest-market ingest-headlines ingest-fred ingest-polymarket post-ingest ## Ingest all 5 data sources + NLP processing
+
+ingest-history: ## Ingest 5 years of historical data (events + market + FRED)
+	@echo "$(BLUE)Ingesting 5 years of historical data...$(NC)"
+	@echo "$(YELLOW)GDELT alone will take 1-3 hours. Grab a coffee.$(NC)"
 	docker exec gmt-api python -c "\
 from datetime import date, timedelta; \
 from src.ingestion.gdelt import GDELTIngestion; \
 from src.ingestion.market_data import MarketDataIngestion; \
+from src.ingestion.fred import FREDIngestion; \
+print('Ingesting GDELT events (5 years)...'); \
+g = GDELTIngestion(); \
+g.ingest_date_range(date.today() - timedelta(days=1825), date.today() - timedelta(days=1)); \
+print('Ingesting market data (5 years)...'); \
+m = MarketDataIngestion(); \
+m.ingest_all_symbols(date.today() - timedelta(days=1825), date.today(), skip_existing=False); \
+print('Ingesting FRED indicators (5 years)...'); \
+f = FREDIngestion(); \
+f.ingest_all_series(start_date=date.today() - timedelta(days=1825), end_date=date.today()); \
+"
+	@echo "$(GREEN)Historical data ingestion complete. Run 'make post-ingest' to score sentiment and generate embeddings.$(NC)"
+
+ingest-history-1y: ## Ingest 1 year of historical data (faster, for testing)
+	@echo "$(BLUE)Ingesting 1 year of historical data...$(NC)"
+	@echo "$(YELLOW)This may take 15-30 minutes...$(NC)"
+	docker exec gmt-api python -c "\
+from datetime import date, timedelta; \
+from src.ingestion.gdelt import GDELTIngestion; \
+from src.ingestion.market_data import MarketDataIngestion; \
+from src.ingestion.fred import FREDIngestion; \
 print('Ingesting GDELT events (1 year)...'); \
 g = GDELTIngestion(); \
 g.ingest_date_range(date.today() - timedelta(days=365), date.today() - timedelta(days=1)); \
 print('Ingesting market data (1 year)...'); \
 m = MarketDataIngestion(); \
 m.ingest_all_symbols(date.today() - timedelta(days=365), date.today(), skip_existing=False); \
+print('Ingesting FRED indicators (1 year)...'); \
+f = FREDIngestion(); \
+f.ingest_all_series(start_date=date.today() - timedelta(days=365), end_date=date.today()); \
 "
-	@echo "$(GREEN)Historical data ingestion complete.$(NC)"
+	@echo "$(GREEN)Historical data ingestion complete. Run 'make post-ingest' to score sentiment and generate embeddings.$(NC)"
 
 # ============================================================================
 # PREFECT PIPELINE
@@ -246,9 +292,6 @@ train: ## Train all ML models and log to MLflow
 
 prefect-logs: ## View Prefect worker logs
 	docker compose logs -f prefect-worker
-
-logs-ollama: ## View Ollama logs
-	docker compose logs -f ollama
 
 logs-mlflow: ## View MLflow logs
 	docker compose logs -f mlflow

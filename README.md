@@ -184,11 +184,17 @@ cp .env.example .env
 #   LANGCHAIN_API_KEY=...           (optional, for LangSmith tracing)
 #   OLLAMA_MODEL=gemma4:26b         (default — Gemma 4 26B MoE)
 
-# Start all services (database, API, frontend, Ollama, MLflow, Prefect)
-make start
+# Install Ollama natively for GPU acceleration (one-time)
+brew install ollama
 
 # Pull the LLM model (~18GB, first time only)
 make pull-model
+
+# Start Ollama (leave running in a dedicated terminal)
+make ollama-serve
+
+# Start all Docker services (database, API, frontend, MLflow, Prefect)
+make start
 
 # Ingest data from all 5 sources
 make ingest-all
@@ -392,8 +398,9 @@ geopolitical--market-tracker/
 | `frontend` | 3000 | React app via nginx |
 | `prefect-server` | 4200 | Prefect UI + orchestration API |
 | `prefect-worker` | — | Runs scheduled daily pipeline + weekly training |
-| `ollama` | 11434 | Local LLM inference (Gemma 4 26B MoE) |
 | `mlflow` | 5000 | ML experiment tracking UI |
+
+**Ollama runs natively on the host** (not in Docker) to use Metal GPU acceleration on Apple Silicon. Docker Desktop for Mac can't pass through the GPU, so containerized LLM inference is CPU-only. Running Ollama natively is 20-100x faster for models the size of Gemma 4 26B. Docker containers reach Ollama via `http://host.docker.internal:11434`.
 
 ## Development Phases
 

@@ -83,6 +83,27 @@ def _get_client() -> ollama.Client:
     return ollama.Client(host=OLLAMA_BASE_URL)
 
 
+def _extract_content(response: dict) -> str:
+    """Extract the final content from an Ollama chat response.
+
+    Handles Gemma 4's reasoning format where responses are split into
+    'thinking' (chain-of-thought) and 'content' (final answer).
+    Falls back to thinking if content is empty (e.g., when token budget
+    runs out during reasoning).
+    """
+    message = response.get("message", {})
+    content = (message.get("content") or "").strip()
+    if content:
+        return content
+    # Fallback: if the model used all tokens thinking, return that so the
+    # user sees SOMETHING rather than a blank panel
+    thinking = (message.get("thinking") or "").strip()
+    if thinking:
+        logger.warning("Model returned no final content, falling back to thinking output")
+        return thinking
+    return ""
+
+
 def generate_assessment(structured_data: str) -> str:
     """Generate an intelligence assessment from structured analysis data.
 
@@ -108,9 +129,16 @@ def generate_assessment(structured_data: str) -> str:
                     ),
                 },
             ],
-            options={"num_predict": OLLAMA_MAX_TOKENS},
+            # Disable thinking for direct output (Gemma 4 is a reasoning model,
+            # but we don't need internal reasoning for synthesis tasks)
+            think=False,
+            options={"num_predict": 4096, "temperature": 0.3},
         )
-        return response["message"]["content"]
+        result = _extract_content(response)
+        if not result:
+            logger.error(f"Empty response from model. Raw response: {response}")
+            return "Assessment unavailable: model returned empty response."
+        return result
     except Exception as e:
         logger.error(f"Ollama assessment generation failed: {e}")
         return f"Assessment generation unavailable: {e}"
@@ -140,9 +168,16 @@ def generate_briefing(rag_context: str) -> str:
                     ),
                 },
             ],
-            options={"num_predict": 1024},
+            # Disable thinking for direct output (Gemma 4 is a reasoning model,
+            # but we don't need internal reasoning for synthesis tasks)
+            think=False,
+            options={"num_predict": 4096, "temperature": 0.3},
         )
-        return response["message"]["content"]
+        result = _extract_content(response)
+        if not result:
+            logger.error(f"Empty response from model. Raw response: {response}")
+            return "Briefing unavailable: model returned empty response."
+        return result
     except Exception as e:
         logger.error(f"Ollama briefing generation failed: {e}")
         return f"Briefing generation unavailable: {e}"

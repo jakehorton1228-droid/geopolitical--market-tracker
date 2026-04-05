@@ -12,7 +12,7 @@ export function useBriefingSummary(daysBack = 3) {
     queryFn: async () => {
       const { data } = await api.get('/briefing/summary', {
         params: { days_back: daysBack },
-        timeout: 60000, // AI generation can take a while
+        timeout: 180000, // 3 min — first-load of Gemma 4 26B can be slow
       })
       return data
     },

@@ -37,7 +37,9 @@ from src.db.connection import get_session
 logger = logging.getLogger(__name__)
 
 # Documents beyond this distance are filtered out as irrelevant
-MAX_DISTANCE = 0.75
+# Cosine distance range is 0 (identical) to 2 (opposite). 1.0 is orthogonal.
+# 0.9 keeps loosely-related content, filters true noise.
+MAX_DISTANCE = 0.9
 
 
 @dataclass
