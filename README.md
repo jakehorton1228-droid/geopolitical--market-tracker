@@ -10,8 +10,10 @@ This is a personal project focused on building a complete full-stack system from
 - **Frontend**: React 19, Vite, Tailwind CSS, Recharts, Framer Motion, React Query, react-simple-maps
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Data Science**: Correlation analysis, logistic regression, anomaly detection, statistical testing
-- **Data Engineering**: ETL pipelines (5 data sources), database design, REST API design
-- **AI Engineering**: Local LLM inference (Ollama/Llama 3), LangGraph multi-agent orchestration, RAG pipelines, prompt engineering
+- **Machine Learning**: Trained and compared 6 models (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP, LSTM) with time-series aware train/val/test split and MLflow experiment tracking
+- **Data Engineering**: ETL pipelines (5 data sources), feature engineering pipeline (flat + windowed sequences), database design, REST API design
+- **AI Engineering**: Local LLM inference (Ollama + Gemma 4 26B MoE), LangGraph multi-agent orchestration, RAG pipelines, LangSmith observability, prompt engineering
+- **MLOps**: MLflow experiment tracking, weekly model retraining via Prefect
 - **DevOps**: Docker, Docker Compose, nginx, Prefect orchestration, Makefile automation
 
 **Built with [Claude Code](https://claude.com/claude-code)** as an AI pair programmer.
@@ -29,41 +31,56 @@ This is a personal project focused on building a complete full-stack system from
 - **Signals**: Two levels of market direction prediction:
   - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time"
   - **Level 2 (Logistic Regression)**: "Based on today's event profile, probability of UP: 64%. Key drivers: Goldstein score, media coverage"
-- **AI Agent**: Chat interface powered by a LangGraph multi-agent pipeline with local Llama model. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments
+- **AI Agent**: Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
 
-### AI Agent
+### AI Agent (LangGraph Pipeline)
 
-The AI Agent is a Claude-powered analyst with 15 tools across two modes:
+A LangGraph intelligence pipeline that combines deterministic data operations with local LLM synthesis. The supervisor uses state-based routing (no LLM needed for routing), and only the final dissemination node calls the LLM — keeping the system fast, reliable, and cheap to run.
 
-**Intelligence Pipeline** — LangGraph orchestration with deterministic collection/analysis and local LLM synthesis.
+**Pipeline flow:**
+```
+Start -> Supervisor -> Collection -> Supervisor -> Analysis -> Supervisor -> Dissemination -> End
+         (rules)      (determ.)                  (determ.)                  (LLM)
+```
 
-**Multi-Agent Mode (LangGraph)** — A supervisor graph routes between three specialist agents:
-- **Collection Agent** (8 tools) — Gathers raw data: events, market data, headlines, semantic search
-- **Analysis Agent** (6 tools) — Runs correlations, predictions, anomaly detection, sentiment analysis
-- **Dissemination Agent** (0 tools) — Synthesizes findings into a structured intelligence briefing
+- **Supervisor** — Deterministic state-based routing (has data? has analysis? has response?)
+- **Collection Node** — Query parsing + country/asset mappings fetch events, market data, headlines, and RAG context. No LLM tool selection.
+- **Analysis Node** — Deterministic tool execution runs correlations, historical patterns, anomaly detection, and sentiment analysis on whatever was collected
+- **Dissemination Node** — Gemma 4 26B MoE (via Ollama) synthesizes collected data and analysis into a structured intelligence briefing. This is the only LLM call in the pipeline.
 
-| Tool | Description |
-|------|-------------|
-| `get_recent_events` | Query GDELT events by country, date, type |
-| `get_event_summary` | Event counts by country or type |
-| `get_market_data` | OHLCV + returns for any symbol |
-| `get_correlations` | Event-market correlation for a symbol |
-| `get_top_correlations` | Strongest correlations across all symbols |
-| `get_historical_patterns` | Frequency patterns ("when X, Y goes UP Z%") |
-| `run_prediction` | Logistic regression market direction prediction |
-| `detect_anomalies` | Isolation Forest + Z-score anomaly detection |
-| `list_symbols` | All 33 tracked instruments |
-| `get_symbol_countries` | Country-symbol sensitivity mappings |
-| `get_headline_sentiment` | News headlines with FinBERT sentiment scores |
-| `get_sentiment_summary` | Aggregate sentiment statistics |
-| `search_similar_content` | Semantic vector search over headlines and events |
-| `rag_search` | RAG retrieval formatted as intelligence briefing |
+**Observability:** Every graph invocation is traced in LangSmith — node executions, state transitions, and LLM generation are all logged and inspectable.
 
 **Example questions:**
 - "What are the top correlations for crude oil?"
 - "What happened in Russia this month?"
 - "Run a prediction for gold"
 - "Detect anomalies for SPY over the last 90 days"
+
+### ML Training Pipeline
+
+The project trains and compares 6 machine learning models for predicting significant market impact from geopolitical events:
+
+| Model | Type | Features |
+|-------|------|----------|
+| Logistic Regression | Linear baseline | 27 flat features |
+| Random Forest | Tree ensemble | 27 flat features |
+| XGBoost | Gradient boosting | 27 flat features |
+| LightGBM | Gradient boosting | 27 flat features |
+| MLP (PyTorch) | Neural network | 27 flat features |
+| LSTM (PyTorch) | Sequence model | 30-day x 16 feature windows |
+
+**Feature pipeline** (`analysis/ml_features.py`):
+- **Flat features (27)**: Event metrics (Goldstein scale, mentions, tone, conflict/cooperation counts), sentiment aggregates (FinBERT), market context (rolling volatility, momentum, volume), temporal (day of week, month), event velocity (rate of change)
+- **Windowed sequences (30 x 16)**: Same features over a sliding 30-day window, used for LSTM
+
+**Training** (`training/trainer.py`):
+- Time-series aware train/val/test split (70/15/15, no leakage)
+- Each model trained on the same dataset
+- All runs logged to MLflow: params, metrics (accuracy, precision, recall, F1, AUC-ROC), feature importance, classification reports
+- Best model selected by AUC-ROC on the held-out test set
+- Apple Silicon MPS acceleration for PyTorch models
+
+**Orchestration:** Weekly retraining via Prefect (`flows/training_flow.py`). View all runs at `http://localhost:5000` (MLflow UI).
 
 ### RAG System
 
@@ -72,7 +89,7 @@ The RAG pipeline provides contextual intelligence retrieval:
 - **Retriever**: Cosine similarity search across headlines and events with distance thresholds
 - **Context Builder**: Formats retrieved documents into structured LLM context
 - **Briefing Context**: Multi-topic search across 5 geopolitical themes for situational awareness
-- **AI Summary Panel**: Claude-generated intelligence briefing on the Briefing page
+- **AI Summary Panel**: Gemma 4 generated intelligence briefing on the Briefing page
 
 ### Sentiment Analysis
 
@@ -107,7 +124,7 @@ All pages use Framer Motion for polished UI transitions:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    React Frontend (Vite + Framer Motion)           │
 │  Dashboard │ Briefing │ Predictions │ Correlations │ Timeline     │
-│  Map │ Signals │ Agent Chat (Single + Multi-Agent)                │
+│  Map │ Signals │ Agent Chat                                        │
 │  Recharts │ React Query │ Tailwind │ React Simple Maps            │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │ /api proxy (nginx)
@@ -117,7 +134,7 @@ All pages use Framer Motion for polished UI transitions:
 │  /api/events       │ /api/market        │ /api/analysis            │
 │  /api/correlation  │ /api/patterns      │ /api/predictions         │
 │  /api/indicators   │ /api/headlines     │ /api/prediction-markets  │
-│  /api/briefing     │ /api/risk          │ /api/agent/chat          │
+│  /api/briefing     │ /api/agent/chat                                │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
            ┌─────────────────────┼─────────────────────┐
@@ -131,17 +148,24 @@ All pages use Framer Motion for polished UI transitions:
 │  NewsHeadlines     │  │ Anomaly Det.   │  │   Analysis (determ.)   │
 │  EconomicIndicators│  │ Sentiment      │  │   Dissemination (LLM)  │
 │  PredictionMarkets │  │ (FinBERT)      │  │                        │
-│  CorrelationCache  │  │                │  │ Llama 3 via Ollama     │
-│  AnalysisResults   │  │ RAG Pipeline   │  │ RAG Context Builder    │
-│  Embeddings (384d) │  │ (pgvector)     │  │   → AI Summary Panel   │
+│  CorrelationCache  │  │ ML Features    │  │ Gemma 4 26B MoE        │
+│  AnalysisResults   │  │ (flat + seq)   │  │   via Ollama           │
+│  Embeddings (384d) │  │ RAG (pgvector) │  │ LangSmith tracing      │
 └────────────────────┘  └────────────────┘  └────────────────────────┘
 
 Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 
 ┌─────────────────────────────────────────────────────────────────────┐
+│                  ML Training Pipeline (6 models)                   │
+│  LogReg │ Random Forest │ XGBoost │ LightGBM │ MLP │ LSTM         │
+│  All runs logged to MLflow (params, metrics, artifacts)            │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
 │                    Prefect Orchestration                           │
-│  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →     │
-│                  Sentiment → Embeddings → Analysis                │
+│  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →      │
+│                  Sentiment → Embeddings → Analysis                 │
+│  Weekly Pipeline: Feature Engineering → Model Training → MLflow    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -156,22 +180,28 @@ cd geopolitical--market-tracker
 # Copy .env.example and add your keys
 cp .env.example .env
 # Edit .env and set:
-#   OLLAMA_MODEL=llama3.1:8b  (local LLM for AI agent)
-#   FRED_API_KEY=...              (for economic indicators, free at fred.stlouisfed.org)
+#   FRED_API_KEY=...                (free at fred.stlouisfed.org)
+#   LANGCHAIN_API_KEY=...           (optional, for LangSmith tracing)
+#   OLLAMA_MODEL=gemma4:26b         (default — Gemma 4 26B MoE)
 
-# Start all services (database, API, frontend)
+# Start all services (database, API, frontend, Ollama, MLflow, Prefect)
 make start
 
-# Run migrations
-make migrate
+# Pull the LLM model (~18GB, first time only)
+make pull-model
 
 # Ingest data from all 5 sources
 make ingest-all
+
+# Train ML models (optional — requires historical data)
+make train
 
 # Access:
 #   Frontend:   http://localhost:3000
 #   API Docs:   http://localhost:8000/docs
 #   Prefect UI: http://localhost:4200
+#   MLflow UI:  http://localhost:5000
+#   Ollama:     http://localhost:11434
 #   Database:   localhost:5432
 ```
 
@@ -247,10 +277,7 @@ make dev-frontend  # Terminal 2: React on localhost:3000
 | `/api/analysis/event-study` | POST | Run cumulative abnormal return study |
 | `/api/analysis/anomalies/detect` | GET | Run anomaly detection for a symbol |
 | **Briefing** | | |
-| `/api/briefing/snapshot` | GET | Composite briefing data (indicators + movers + headlines + risk) |
-| `/api/briefing/summary` | GET | AI-generated summary or raw RAG context |
-| **Risk** | | |
-| `/api/risk/heatmap` | GET | Country-level risk scoring with temporal trends |
+| `/api/briefing/summary` | GET | AI-generated briefing via local LLM, or raw RAG context as fallback |
 | **Agent** | | |
 | `/api/agent/chat` | POST | Chat with LangGraph multi-agent intelligence pipeline |
 
@@ -280,7 +307,11 @@ geopolitical--market-tracker/
 │   │   │   ├── sentiment.py            # FinBERT sentiment scoring
 │   │   │   ├── embeddings.py           # Sentence transformer embeddings
 │   │   │   ├── feature_engineering.py  # Shared data preparation
+│   │   │   ├── ml_features.py          # ML feature pipeline (flat + windowed)
+│   │   │   ├── synthesis.py            # Ollama client for LLM assessments
 │   │   │   └── logging_config.py       # Logging utilities
+│   │   ├── training/                   # ML model training
+│   │   │   └── trainer.py              # 6-model comparison with MLflow logging
 │   │   ├── api/
 │   │   │   ├── main.py                 # FastAPI app + middleware
 │   │   │   ├── schemas.py              # Pydantic request/response models
@@ -298,6 +329,7 @@ geopolitical--market-tracker/
 │   │   ├── ingestion_flow.py           # Daily ingestion (5 sources)
 │   │   ├── analysis_flow.py            # Daily correlation + pattern computation
 │   │   ├── daily_pipeline.py           # Master flow (ingestion → analysis)
+│   │   ├── training_flow.py            # Weekly model training pipeline
 │   │   └── deploy.py                   # Registers cron schedule
 │   ├── Dockerfile.api                  # API container
 │   ├── Dockerfile.worker               # Prefect worker container
@@ -321,7 +353,8 @@ geopolitical--market-tracker/
 │       └── utils/                      # Constants, formatters, animation presets
 │
 ├── .env.example                        # Environment variable template
-├── docker-compose.yml                  # Services: db, api, frontend, prefect, worker
+├── docs/                               # Architecture diagrams and roadmap
+├── docker-compose.yml                  # Services: db, api, frontend, prefect, worker, ollama, mlflow
 ├── Dockerfile.frontend                 # Multi-stage: Node build → nginx
 ├── nginx.conf                          # SPA routing + API proxy
 ├── Makefile                            # Dev and deployment commands
@@ -358,7 +391,9 @@ geopolitical--market-tracker/
 | `api` | 8000 | FastAPI REST API |
 | `frontend` | 3000 | React app via nginx |
 | `prefect-server` | 4200 | Prefect UI + orchestration API |
-| `prefect-worker` | — | Runs scheduled daily pipeline |
+| `prefect-worker` | — | Runs scheduled daily pipeline + weekly training |
+| `ollama` | 11434 | Local LLM inference (Gemma 4 26B MoE) |
+| `mlflow` | 5000 | ML experiment tracking UI |
 
 ## Development Phases
 
@@ -369,7 +404,10 @@ geopolitical--market-tracker/
 | C | Visual polish — Framer Motion on all pages, FRED cards on Dashboard | Done |
 | D | Sentiment analysis — pgvector, headline NLP, semantic search, glassmorphism UI | Done |
 | E | RAG system — embeddings pipeline, vector search, context builder, AI Summary panel | Done |
-| F | Multi-agent — LangGraph supervisor graph, specialist agents, chat UI toggle | Done |
+| F | Multi-agent — LangGraph supervisor graph, specialist agents, chat UI | Done |
+| G | Local LLM swap — replaced Anthropic API with Ollama + Gemma 4 26B MoE, deterministic collection/analysis nodes | Done |
+| H | ML training pipeline — feature engineering (flat + windowed), 6 models (LogReg, RF, XGBoost, LightGBM, MLP, LSTM), MLflow tracking | Done |
+| I | LangSmith observability — full tracing on LangGraph pipeline | Done |
 
 ## License
 
