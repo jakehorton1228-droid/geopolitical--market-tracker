@@ -13,14 +13,16 @@ export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<Dashboard />} />
+        {/* Briefing is the default landing page — the narrative starts here */}
+        <Route path="/" element={<IntelligenceBriefing />} />
         <Route path="/briefing" element={<IntelligenceBriefing />} />
-        <Route path="/markets" element={<PredictionMarkets />} />
-        <Route path="/correlation" element={<CorrelationExplorer />} />
-        <Route path="/timeline" element={<EventTimeline />} />
         <Route path="/map" element={<WorldMapView />} />
+        <Route path="/timeline" element={<EventTimeline />} />
+        <Route path="/correlation" element={<CorrelationExplorer />} />
         <Route path="/signals" element={<Signals />} />
+        <Route path="/markets" element={<PredictionMarkets />} />
         <Route path="/agent" element={<AgentChat />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Route>
     </Routes>
   )

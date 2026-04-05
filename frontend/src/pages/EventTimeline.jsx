@@ -15,9 +15,11 @@ import SymbolSelector from '../components/shared/SymbolSelector'
 import DateRangePicker from '../components/shared/DateRangePicker'
 import PriceEventOverlay from '../components/charts/PriceEventOverlay'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import PageHelp from '../components/shared/PageHelp'
 import { useMarketWithEvents } from '../api/market'
 import { EVENT_GROUP_CONFIG } from '../utils/constants'
 import { fadeInUp, scaleIn } from '../utils/animations'
+import { GLOSSARY } from '../utils/glossary'
 
 function daysAgo(n) {
   const d = new Date()
@@ -39,9 +41,20 @@ export default function EventTimeline() {
       <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary">Event Timeline</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Price chart overlaid with geopolitical events
+          When did events happen, and how did prices respond? See the causal story behind specific moves.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="Pick an asset and a date range. The chart shows the asset's price with colored dots marking days when significant geopolitical events occurred in countries related to that asset. Hover over a dot to see event details."
+        lookFor={[
+          'Clusters of red dots (conflict events) near large price moves',
+          'Days with multiple high-mention events — likely market-moving',
+          'Gaps between events and price reaction — sometimes markets react a day or two later',
+          'The events table below shows which specific events happened on each day',
+        ]}
+        terms={[GLOSSARY.goldstein, GLOSSARY.mentions, GLOSSARY.dailyReturn]}
+      />
 
       <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }} className="flex flex-wrap items-center gap-4">
         <SymbolSelector value={symbol} onChange={setSymbol} />

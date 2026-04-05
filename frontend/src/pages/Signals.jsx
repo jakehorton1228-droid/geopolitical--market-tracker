@@ -17,10 +17,12 @@ import SymbolSelector from '../components/shared/SymbolSelector'
 import PatternCard from '../components/cards/PatternCard'
 import PredictionCard from '../components/cards/PredictionCard'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import PageHelp from '../components/shared/PageHelp'
 import { useAllPatterns } from '../api/patterns'
 import { useModelSummary } from '../api/predictions'
 import { usePredictLogistic } from '../api/predictions'
 import { fadeInUp, staggerContainer, staggerItem, scaleIn } from '../utils/animations'
+import { GLOSSARY } from '../utils/glossary'
 const DATA_START = '2016-01-01'
 
 function todayStr() {
@@ -64,11 +66,22 @@ export default function Signals() {
   return (
     <div className="space-y-6">
       <motion.div {...fadeInUp}>
-        <h2 className="text-2xl font-bold text-text-primary">Signals</h2>
+        <h2 className="text-2xl font-bold text-text-primary">Market Signals</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Historical patterns (Level 1) and logistic regression predictions (Level 2)
+          Can past events predict future moves? Two approaches: simple historical frequency ("when X happens, the market goes UP 62% of the time") and a trained ML model.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="This page tests whether geopolitical events have predictive power for market direction. The patterns below come from counting past occurrences; the model learns to combine multiple signals. Neither beats random by much — markets are noisy — but any edge above 50% is meaningful."
+        lookFor={[
+          'Pattern cards with UP% far from 50% and low p-values (strong signal)',
+          'Model accuracy above the 50% random baseline — even 53-55% is useful',
+          'Feature importance — which event metrics the model relies on most',
+          'Large training sample size (n > 1,000) — the model has seen enough data to be trusted',
+        ]}
+        terms={[GLOSSARY.accuracy, GLOSSARY.logisticRegression, GLOSSARY.featureImportance, GLOSSARY.crossValidation, GLOSSARY.pvalue]}
+      />
 
       {/* How This Works — collapsible methodology panel */}
       <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }}>

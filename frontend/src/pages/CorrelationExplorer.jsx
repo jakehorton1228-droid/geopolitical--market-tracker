@@ -17,10 +17,13 @@ import SymbolSelector from '../components/shared/SymbolSelector'
 import DateRangePicker from '../components/shared/DateRangePicker'
 import CorrelationHeatmap from '../components/charts/CorrelationHeatmap'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import PageHelp from '../components/shared/PageHelp'
+import InfoTooltip from '../components/shared/InfoTooltip'
 import { useCorrelations, useRollingCorrelation, useCorrelationHeatmap } from '../api/correlation'
 import { correlationColor, formatCorrelation } from '../utils/formatters'
 import { COLORS, DEFAULT_SYMBOLS } from '../utils/constants'
 import { fadeInUp, staggerContainer, staggerItem } from '../utils/animations'
+import { GLOSSARY } from '../utils/glossary'
 
 function daysAgo(n) {
   const d = new Date()
@@ -50,9 +53,20 @@ export default function CorrelationExplorer() {
       <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary">Correlation Explorer</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Analyze how geopolitical event metrics correlate with market returns
+          Do geopolitical events move markets? Pick an asset and see which event types have the strongest statistical relationship with its price.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="A correlation measures how two things move together. +1 means they always rise and fall in sync; -1 means they move inversely; 0 means no relationship. For event-market data, correlations are usually small — even 0.15 can be meaningful."
+        lookFor={[
+          'Values above 0.2 (positive) or below -0.2 (negative) — worth paying attention to',
+          'Low p-values (p < 0.05) — statistically significant, unlikely to be random',
+          'Large sample sizes (n > 100) — more reliable than tiny samples',
+          'Stable rolling correlations — if the line is flat, the relationship is consistent; if it swings, the relationship shifts with market regimes',
+        ]}
+        terms={[GLOSSARY.correlation, GLOSSARY.pvalue, GLOSSARY.nObservations, GLOSSARY.confidenceInterval]}
+      />
 
       {/* Controls */}
       <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }} className="flex flex-wrap items-center gap-4">
@@ -76,8 +90,12 @@ export default function CorrelationExplorer() {
       {/* Per-Metric Correlation Cards */}
       <motion.div {...fadeInUp} transition={{ delay: 0.2, duration: 0.4 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            {symbol} — Correlation per Event Metric
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>{symbol} — Event Metrics vs Price Moves</span>
+            <InfoTooltip {...GLOSSARY.correlation} />
+            <span className="text-[10px] text-text-secondary normal-case tracking-normal ml-2">
+              click a card to see how the relationship evolved over time
+            </span>
           </h3>
           {corrLoading ? (
             <LoadingSpinner />
@@ -88,33 +106,42 @@ export default function CorrelationExplorer() {
               initial="initial"
               animate="animate"
             >
-              {correlations.map((c) => (
-                <motion.button
-                  key={c.event_metric}
-                  variants={staggerItem.variants}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setSelectedMetric(c.event_metric)}
-                  className={`text-left p-3 rounded-lg border transition-colors ${
-                    selectedMetric === c.event_metric
-                      ? 'border-accent-blue bg-accent-blue/10'
-                      : 'border-border/50 hover:border-border'
-                  }`}
-                >
-                  <p className="text-xs text-text-secondary">
-                    {c.event_metric.replace(/_/g, ' ')}
-                  </p>
-                  <p
-                    className="text-lg font-bold font-mono"
-                    style={{ color: correlationColor(c.correlation) }}
+              {correlations.map((c) => {
+                const abs = Math.abs(c.correlation)
+                const strength = abs >= 0.3 ? 'strong' : abs >= 0.15 ? 'moderate' : abs >= 0.05 ? 'weak' : 'negligible'
+                const sig = c.p_value < 0.05
+                return (
+                  <motion.button
+                    key={c.event_metric}
+                    variants={staggerItem.variants}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setSelectedMetric(c.event_metric)}
+                    className={`text-left p-3 rounded-lg border transition-colors ${
+                      selectedMetric === c.event_metric
+                        ? 'border-accent-blue bg-accent-blue/10'
+                        : 'border-border/50 hover:border-border'
+                    }`}
                   >
-                    {formatCorrelation(c.correlation)}
-                  </p>
-                  <p className="text-[10px] text-text-secondary mt-1">
-                    p={c.p_value < 0.001 ? '<0.001' : c.p_value.toFixed(3)} | n={c.n_observations}
-                  </p>
-                </motion.button>
-              ))}
+                    <p className="text-xs text-text-secondary capitalize">
+                      {c.event_metric.replace(/_/g, ' ')}
+                    </p>
+                    <p
+                      className="text-lg font-bold font-mono"
+                      style={{ color: correlationColor(c.correlation) }}
+                    >
+                      {formatCorrelation(c.correlation)}
+                    </p>
+                    <p className="text-[10px] text-text-secondary mt-1">
+                      <span className="capitalize">{strength}</span>
+                      {sig ? ' · significant' : ' · not significant'}
+                    </p>
+                    <p className="text-[9px] text-text-secondary/70 mt-0.5 font-mono">
+                      p={c.p_value < 0.001 ? '<0.001' : c.p_value.toFixed(3)} · n={c.n_observations}
+                    </p>
+                  </motion.button>
+                )
+              })}
             </motion.div>
           ) : (
             <p className="text-text-secondary text-sm text-center py-4">
@@ -127,8 +154,12 @@ export default function CorrelationExplorer() {
       {/* Rolling Correlation */}
       <motion.div {...fadeInUp} transition={{ delay: 0.3, duration: 0.4 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            Rolling Correlation: {symbol} x {selectedMetric.replace(/_/g, ' ')}
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>Relationship Over Time: {symbol} × {selectedMetric.replace(/_/g, ' ')}</span>
+            <InfoTooltip {...GLOSSARY.confidenceInterval} />
+            <span className="text-[10px] text-text-secondary normal-case tracking-normal ml-2">
+              flat line = stable relationship; swings = shifts with market regime
+            </span>
           </h3>
           {rollingLoading ? (
             <LoadingSpinner />

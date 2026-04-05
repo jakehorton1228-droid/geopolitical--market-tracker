@@ -1,14 +1,23 @@
 import { NavLink } from 'react-router-dom'
 
+// Navigation follows a natural user flow:
+//   1. Briefing    — What's happening? (the daily narrative, default landing page)
+//   2. World Map   — Where?
+//   3. Timeline    — When and how did markets respond?
+//   4. Correlations — Which event types reliably move which markets?
+//   5. Signals     — What do the models predict?
+//   6. Predictions — What does the crowd (Polymarket) think?
+//   7. AI Agent    — Ask anything
+//   8. Dashboard   — Platform overview (system stats)
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: '⊞' },
   { to: '/briefing', label: 'Briefing', icon: '◉' },
-  { to: '/markets', label: 'Predictions', icon: '◎' },
-  { to: '/correlation', label: 'Correlations', icon: '⊘' },
-  { to: '/timeline', label: 'Timeline', icon: '⊟' },
   { to: '/map', label: 'World Map', icon: '⊕' },
+  { to: '/timeline', label: 'Timeline', icon: '⊟' },
+  { to: '/correlation', label: 'Correlations', icon: '⊘' },
   { to: '/signals', label: 'Signals', icon: '⊗' },
+  { to: '/markets', label: 'Predictions', icon: '◎' },
   { to: '/agent', label: 'AI Agent', icon: '◈' },
+  { to: '/dashboard', label: 'Dashboard', icon: '⊞' },
 ]
 
 export default function Sidebar() {

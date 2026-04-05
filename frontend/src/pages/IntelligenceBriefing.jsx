@@ -29,6 +29,9 @@ import { useRecentHeadlines } from '../api/headlines'
 import { useEventsByCountry } from '../api/events'
 import { useMarketWithEvents } from '../api/market'
 import { useBriefingSummary } from '../api/briefing'
+import PageHelp from '../components/shared/PageHelp'
+import InfoTooltip from '../components/shared/InfoTooltip'
+import { GLOSSARY } from '../utils/glossary'
 import { fadeInUp, staggerContainer, staggerItem } from '../utils/animations'
 
 function daysAgo(n) {
@@ -140,15 +143,28 @@ export default function IntelligenceBriefing() {
           </span>
         </div>
         <p className="text-sm text-text-secondary mt-1">
-          Real-time fusion of geopolitical events, markets, economic indicators, news, and predictions
+          Start here. A single page that fuses economic data, prediction market movements, news headlines, and global events — with an AI-generated summary at the bottom.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="This is the flagship page — what you'd read first thing in the morning. Six panels cover different angles: the economy, crowd predictions, news, price action, conflict hotspots, and an AI narrative tying it all together."
+        lookFor={[
+          'Economic indicators with large deltas (green = improving, red = worsening)',
+          'Prediction markets with big 24h probability shifts — the crowd is repricing risk',
+          'Headlines in red (negative sentiment) — often lead market moves',
+          'Countries in deep red on the risk radar — active conflict zones',
+          'The AI summary at the bottom — cites specific headlines from the context',
+        ]}
+        terms={[GLOSSARY.goldstein, GLOSSARY.finbert, GLOSSARY.polymarket, GLOSSARY.rag, GLOSSARY.fred]}
+      />
 
       {/* Panel 1: FRED Macro Strip */}
       <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            Economic Indicators
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>US Economy Snapshot</span>
+            <InfoTooltip {...GLOSSARY.fred} />
           </h3>
           {indicatorsLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-pulse">
@@ -206,8 +222,9 @@ export default function IntelligenceBriefing() {
         {/* Panel 2: Prediction Markets (movers if available, otherwise top by volume) */}
         <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
           <div className="glass-panel glass-panel-hover p-4 h-full border-gradient-top">
-            <h3 className="section-label mb-3">
-              {movers?.length > 0 ? 'Prediction Market Movers (24h)' : 'Top Prediction Markets'}
+            <h3 className="section-label mb-3 flex items-center gap-2">
+              <span>{movers?.length > 0 ? 'Biggest Odds Changes (24h)' : 'Top Prediction Markets'}</span>
+              <InfoTooltip {...GLOSSARY.polymarket} />
             </h3>
             {(moversLoading || marketsLoading) ? (
               <div className="space-y-2 animate-pulse">
@@ -294,8 +311,9 @@ export default function IntelligenceBriefing() {
         <motion.div {...fadeInUp} transition={{ delay: 0.3 }}>
           <div className="glass-panel glass-panel-hover p-4 h-full border-gradient-top">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="section-label">
-                Latest Headlines
+              <h3 className="section-label flex items-center gap-2">
+                <span>Latest Headlines</span>
+                <InfoTooltip {...GLOSSARY.finbert} />
               </h3>
               {headlines?.length > 0 && (() => {
                 const scored = headlines.filter(h => h.sentiment_score != null)
@@ -353,10 +371,10 @@ export default function IntelligenceBriefing() {
         <div className="glass-panel p-4 border-gradient-top">
           <div className="flex items-center justify-between mb-3">
             <h3 className="section-label">
-              Fused Timeline: {selectedSymbol} + Events
+              Price + Event Timeline: {selectedSymbol}
             </h3>
             <span className="text-[10px] text-text-secondary">
-              Last 30 days • Red dots = high-impact events
+              Last 30 days • Red dots mark days with significant geopolitical events
             </span>
           </div>
           {priceLoading ? (
@@ -422,8 +440,12 @@ export default function IntelligenceBriefing() {
       {/* Panel 5: Risk Radar */}
       <motion.div {...fadeInUp} transition={{ delay: 0.5 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            Risk Radar — Hottest Countries (30d)
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>Conflict Hotspots (Last 30 Days)</span>
+            <InfoTooltip {...GLOSSARY.goldstein} />
+            <span className="text-[10px] text-text-secondary normal-case tracking-normal ml-2">
+              (red = conflict, green = cooperation)
+            </span>
           </h3>
           {countryLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 animate-pulse">
@@ -477,12 +499,13 @@ export default function IntelligenceBriefing() {
       <motion.div {...fadeInUp} transition={{ delay: 0.6 }}>
         <div className="glass-panel p-4 border-gradient-top">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="section-label">
-              AI Situational Summary
+            <h3 className="section-label flex items-center gap-2">
+              <span>AI Situational Summary</span>
+              <InfoTooltip {...GLOSSARY.rag} />
             </h3>
             {briefingSummary?.source === 'ai_generated' && (
               <span className="text-[10px] font-mono text-accent-cyan">
-                powered by RAG
+                Gemma 4 · grounded in real data
               </span>
             )}
           </div>

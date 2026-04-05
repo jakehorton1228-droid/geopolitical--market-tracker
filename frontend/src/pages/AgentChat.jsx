@@ -136,7 +136,7 @@ export default function AgentChat() {
         <div>
           <h2 className="text-2xl font-bold text-text-primary">AI Analyst</h2>
           <p className="text-sm text-text-secondary mt-0.5">
-            LangGraph intelligence pipeline with local Llama model
+            Ask questions in plain English — the AI queries real data, runs analysis, and writes a response grounded in what it finds.
           </p>
         </div>
         <div className="flex items-center gap-3">

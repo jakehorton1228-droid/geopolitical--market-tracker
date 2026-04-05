@@ -14,9 +14,11 @@ import {
 } from 'react-simple-maps'
 import DateRangePicker from '../components/shared/DateRangePicker'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import PageHelp from '../components/shared/PageHelp'
 import { useEventsMap } from '../api/events'
 import { COLORS, ISO_NUM_TO_A3 } from '../utils/constants'
 import { fadeInUp, scaleIn, staggerContainer, staggerItem } from '../utils/animations'
+import { GLOSSARY } from '../utils/glossary'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
@@ -68,9 +70,20 @@ export default function WorldMapView() {
       <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary">World Map</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Geopolitical event intensity by country
+          Where in the world is the action? Countries are colored by how many significant events happened there in the selected date range.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="Each country is shaded by total event count. Red = very active (500+ events), then amber, blue, and indigo for progressively lower activity. Click any country to see its breakdown — conflict vs cooperation, top actors, average sentiment."
+        lookFor={[
+          'Countries shaded red or amber — current geopolitical hotspots',
+          'Unexpected color contrasts (e.g., neighboring countries with very different intensity)',
+          'Countries with high conflict counts vs high cooperation counts — tells you the nature of the activity',
+          'Click a country to dig into which event types dominate there',
+        ]}
+        terms={[GLOSSARY.goldstein, GLOSSARY.gdelt, GLOSSARY.mentions]}
+      />
 
       <motion.div {...fadeInUp} transition={{ delay: 0.1, duration: 0.4 }}>
         <DateRangePicker

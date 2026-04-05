@@ -14,10 +14,12 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import PageHelp from '../components/shared/PageHelp'
 import { usePredictionMarkets, useMarketHistory } from '../api/predictionMarkets'
 import { staggerContainer, staggerItem, fadeInUp } from '../utils/animations'
 import { COLORS } from '../utils/constants'
 import SkeletonChart from '../components/shared/SkeletonChart'
+import { GLOSSARY } from '../utils/glossary'
 
 /** Format a probability as a percentage string. */
 function formatProb(p) {
@@ -190,9 +192,20 @@ export default function PredictionMarkets() {
       <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary tracking-tight">Prediction Markets</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Geopolitical prediction market odds from Polymarket — click any row to see the probability trend
+          What does the crowd think will happen? Each question has a market where people bet real money. The price of a YES share equals the crowd's implied probability.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="Polymarket lets users bet on real-world outcomes. If a YES share trades at $0.35, the market's collective forecast is 35% likely. These odds update in real time as traders buy and sell — often faster than news headlines react."
+        lookFor={[
+          'High-volume markets — more money = more reliable signal',
+          'Probabilities near 50% — the crowd is genuinely uncertain',
+          'Probabilities that have shifted a lot recently — something new happened',
+          'Click any row to see how the probability has moved over time',
+        ]}
+        terms={[GLOSSARY.polymarket]}
+      />
 
       {/* Sort controls */}
       <motion.div {...fadeInUp} className="flex gap-2">

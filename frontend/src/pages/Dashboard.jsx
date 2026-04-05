@@ -14,11 +14,14 @@ import TopCorrelationsBar from '../components/charts/TopCorrelationsBar'
 import AnimatedNumber from '../components/shared/AnimatedNumber'
 import SkeletonCard from '../components/shared/SkeletonCard'
 import SkeletonChart from '../components/shared/SkeletonChart'
+import PageHelp from '../components/shared/PageHelp'
+import InfoTooltip from '../components/shared/InfoTooltip'
 import { useEventCount, useEvents } from '../api/events'
 import { useSymbols } from '../api/market'
 import { useTopCorrelations } from '../api/correlation'
 import { useLatestIndicators } from '../api/indicators'
 import { fadeInUp, staggerContainer, staggerItem } from '../utils/animations'
+import { GLOSSARY } from '../utils/glossary'
 
 function daysAgo(n) {
   const d = new Date()
@@ -68,9 +71,20 @@ export default function Dashboard() {
       <motion.div {...fadeInUp}>
         <h2 className="text-2xl font-bold text-text-primary tracking-tight">Dashboard</h2>
         <p className="text-sm text-text-secondary mt-1">
-          Overview of geopolitical events and market correlations
+          A bird's-eye view of the entire platform — data volume, economic health, and the strongest statistical links between events and markets.
         </p>
       </motion.div>
+
+      <PageHelp
+        description="This page answers: what does our data look like, and what stands out? Use it as a starting point before drilling into specific pages."
+        lookFor={[
+          'Growing event counts — more data means stronger analysis',
+          'Economic indicator deltas (green = improving, red = worsening)',
+          'Strong correlations above 0.2 in the top chart',
+          'Large media mention counts in recent events (widely covered = likely market-moving)',
+        ]}
+        terms={[GLOSSARY.gdelt, GLOSSARY.fred, GLOSSARY.correlation, GLOSSARY.goldstein, GLOSSARY.mentions]}
+      />
 
       {/* Metric Cards */}
       <motion.div
@@ -82,27 +96,31 @@ export default function Dashboard() {
         <motion.div variants={staggerItem.variants}>
           {countLoading ? <SkeletonCard /> : (
             <MetricCard
-              label="Events (since 2016)"
+              label="Geopolitical Events"
               value={eventCount?.count?.toLocaleString() ?? '0'}
-              subtext="GDELT geopolitical events"
+              subtext="Global events tracked since 2016 (GDELT)"
             />
           )}
         </motion.div>
         <motion.div variants={staggerItem.variants}>
           {symbolsLoading ? <SkeletonCard /> : (
             <MetricCard
-              label="Symbols Tracked"
+              label="Markets Tracked"
               value={symbols?.length ?? '0'}
-              subtext="Commodities, currencies, ETFs"
+              subtext="Commodities, currencies, ETFs, bonds"
             />
           )}
         </motion.div>
         <motion.div variants={staggerItem.variants}>
           {corrLoading ? <SkeletonCard /> : (
             <MetricCard
-              label="Strongest Correlation"
+              label="Strongest Event-Market Link"
               value={strongestCorr ? strongestCorr.correlation.toFixed(3) : '—'}
-              subtext={strongestCorr ? `${strongestCorr.symbol} x ${strongestCorr.event_metric.replace(/_/g, ' ')} (Pearson)` : ''}
+              subtext={
+                strongestCorr
+                  ? `${strongestCorr.symbol} ↔ ${strongestCorr.event_metric.replace(/_/g, ' ')} — how closely they move together (-1 to +1)`
+                  : 'No data yet'
+              }
               color={strongestCorr?.correlation > 0 ? '#10b981' : '#ef4444'}
             />
           )}
@@ -111,7 +129,7 @@ export default function Dashboard() {
           <MetricCard
             label="Data Sources"
             value="5"
-            subtext="GDELT + Yahoo + RSS + FRED + Polymarket"
+            subtext="GDELT events, Yahoo Finance, RSS news, FRED economics, Polymarket odds"
           />
         </motion.div>
       </motion.div>
@@ -119,8 +137,9 @@ export default function Dashboard() {
       {/* FRED Economic Indicators */}
       <motion.div {...fadeInUp} transition={{ delay: 0.2, duration: 0.4 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            Economic Indicators (FRED)
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>US Economy Snapshot</span>
+            <InfoTooltip {...GLOSSARY.fred} />
           </h3>
           {indicatorsLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-pulse">
@@ -192,8 +211,9 @@ export default function Dashboard() {
       {/* Recent High-Impact Events */}
       <motion.div {...fadeInUp} transition={{ delay: 0.4, duration: 0.4 }}>
         <div className="glass-panel p-4 border-gradient-top">
-          <h3 className="section-label mb-3">
-            Recent High-Impact Events
+          <h3 className="section-label mb-3 flex items-center gap-2">
+            <span>Recent Major Events</span>
+            <span className="text-[10px] text-text-secondary normal-case tracking-normal">(sorted by news coverage)</span>
           </h3>
           {eventsLoading ? (
             <div className="space-y-2 animate-pulse">
@@ -213,9 +233,19 @@ export default function Dashboard() {
                   <tr className="text-text-secondary border-b border-border">
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Location</th>
-                    <th className="text-left p-2">Actors</th>
-                    <th className="text-right p-2">Goldstein</th>
-                    <th className="text-right p-2">Mentions</th>
+                    <th className="text-left p-2">Who Did What</th>
+                    <th className="text-right p-2">
+                      <span className="inline-flex items-center gap-1">
+                        <span>Tone</span>
+                        <InfoTooltip {...GLOSSARY.goldstein} />
+                      </span>
+                    </th>
+                    <th className="text-right p-2">
+                      <span className="inline-flex items-center gap-1">
+                        <span>Coverage</span>
+                        <InfoTooltip {...GLOSSARY.mentions} />
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
