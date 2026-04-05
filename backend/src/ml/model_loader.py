@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 import joblib
 import mlflow
+import mlflow.pyfunc
 from mlflow.tracking import MlflowClient
 
 from src.config.settings import MLFLOW_TRACKING_URI
@@ -83,8 +84,34 @@ class ChampionModel:
         # Apply the same scaling used during training
         feature_vector_scaled = self.scaler.transform(feature_vector)
 
-        # Predict probability
-        probs = self.model.predict_proba(feature_vector_scaled)[0]
+        # pyfunc models expect a DataFrame with named columns for most flavors
+        X_df = pd.DataFrame(feature_vector_scaled, columns=self.feature_names)
+
+        # pyfunc.predict() returns predictions — shape depends on flavor:
+        # - sklearn classifier without probabilities: 1D array of class labels
+        # - sklearn/xgb/lgbm with predict_proba enabled: 2D array of probabilities
+        # We use the underlying model's predict_proba if available (via
+        # the raw flavor), otherwise fall back to pyfunc.
+        try:
+            # Most sklearn-flavor pyfunc wrappers expose the underlying
+            # model via _model_impl (XGBoost, LightGBM, RF, LogReg)
+            raw_model = getattr(self.model, "_model_impl", None)
+            if raw_model is not None and hasattr(raw_model, "predict_proba"):
+                probs = raw_model.predict_proba(feature_vector_scaled)[0]
+            elif raw_model is not None and hasattr(raw_model, "sklearn_model"):
+                # Some flavors wrap the sklearn model one level deeper
+                probs = raw_model.sklearn_model.predict_proba(feature_vector_scaled)[0]
+            else:
+                # Fall back to pyfunc predict — returns class labels, not probs
+                pred_class = self.model.predict(X_df)
+                val = pred_class[0] if hasattr(pred_class, "__iter__") else pred_class
+                probs = np.array([0.0, 1.0]) if val == 1 else np.array([1.0, 0.0])
+        except Exception as e:
+            logger.error(f"Predict failed: {e}; falling back to pyfunc.predict")
+            pred_class = self.model.predict(X_df)
+            val = pred_class[0] if hasattr(pred_class, "__iter__") else pred_class
+            probs = np.array([0.0, 1.0]) if val == 1 else np.array([1.0, 0.0])
+
         prob_up = float(probs[1]) if len(probs) > 1 else float(probs[0])
         prediction = "UP" if prob_up >= 0.5 else "DOWN"
 
@@ -163,8 +190,9 @@ def get_champion_model(force_reload: bool = False) -> Optional[ChampionModel]:
 
         logger.info(f"Loading champion model from {model_uri}")
 
-        # Load the model via MLflow's universal loader (handles sklearn/xgb/lgbm)
-        model = mlflow.sklearn.load_model(model_uri)
+        # Use pyfunc to load — it's the universal loader that works
+        # regardless of flavor (sklearn, xgboost, lightgbm, etc.)
+        model = mlflow.pyfunc.load_model(model_uri)
 
         # Load the preprocessing artifacts from the run
         scaler, feature_names = _load_preprocessing(client, run_id)

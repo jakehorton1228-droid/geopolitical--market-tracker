@@ -20,7 +20,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.ml.model_loader import get_champion_model
+from src.ml.model_loader import get_champion_model, reload_champion
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,41 @@ def get_model_summary(
     summary["model_name"] = "Logistic Regression (legacy)"
     summary["model_source"] = "legacy"
     return summary
+
+
+@router.post("/reload", response_model=dict)
+def reload_model():
+    """
+    Flush the champion model cache and reload from MLflow.
+
+    Call this after a new training run to pick up the new champion
+    without restarting the API container. The training flow calls this
+    automatically after promoting a new model.
+
+    Returns metadata about the newly-loaded champion, or a note
+    indicating that no champion is registered yet.
+    """
+    logger.info("Reloading champion model from MLflow...")
+    champion = reload_champion()
+
+    if champion is None:
+        return {
+            "status": "no_champion",
+            "message": "No champion model is currently registered in MLflow.",
+        }
+
+    meta = champion.metadata()
+    logger.info(
+        f"Champion reloaded: {meta['model_name']} v{meta['version']} "
+        f"(AUC={meta['auc']})"
+    )
+    return {
+        "status": "reloaded",
+        "model_name": meta["model_name"],
+        "version": meta["version"],
+        "auc": meta["auc"],
+        "n_features": meta["n_features"],
+    }
 
 
 # ---------------------------------------------------------------------------

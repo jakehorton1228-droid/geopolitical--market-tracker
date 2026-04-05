@@ -6,15 +6,38 @@ Runs the full training pipeline:
 2. Train all 6 models (LogReg, RF, XGBoost, LightGBM, MLP, LSTM)
 3. Log everything to MLflow (params, metrics, artifacts)
 4. Register the winning sklearn-compatible model as the champion
-5. Report the best model by AUC-ROC
+5. POST to the API reload endpoint so the running server picks up the
+   new champion without needing a restart
+6. Report the best model by AUC-ROC
 
 Designed to run weekly via Prefect schedule, or manually on demand.
 MLflow UI at http://localhost:5000 shows all experiment results.
 """
 
+import os
 from typing import Optional
 
+import requests
 from prefect import flow, task, get_run_logger
+
+
+# URL of the API service that serves predictions. Inside Docker this is
+# the service name; outside it defaults to localhost.
+API_BASE_URL = os.getenv("GMIP_API_URL", "http://api:8000")
+
+
+def _reload_api_champion(logger) -> None:
+    """POST to the API reload endpoint so it picks up the new champion."""
+    try:
+        resp = requests.post(f"{API_BASE_URL}/api/predictions/reload", timeout=60)
+        resp.raise_for_status()
+        logger.info(f"API champion reload: {resp.json()}")
+    except requests.RequestException as e:
+        # Don't fail the whole flow if the API isn't reachable — training
+        # results are still in MLflow and the next API restart will pick
+        # them up.
+        logger.warning(f"Could not reload API champion ({e}). "
+                       f"The API will pick up the new champion on next restart.")
 
 
 @task(name="train-all-models", retries=0, log_prints=True, timeout_seconds=1800)
@@ -42,6 +65,9 @@ def train_models(symbols: Optional[list[str]] = None) -> dict:
             f"Champion: {champion['model_name']} v{champion['version']} "
             f"(AUC={champion['test_auc']:.4f}, promoted={champion['promoted']})"
         )
+
+    # Tell the API to reload the champion from MLflow
+    _reload_api_champion(logger)
 
     return {
         "best_model": best,
@@ -93,3 +119,6 @@ if __name__ == "__main__":
     if results.get("champion"):
         c = results["champion"]
         log.info(f"Champion: {c['model_name']} v{c['version']} (AUC={c['test_auc']:.4f})")
+
+    # Tell the API to reload the champion
+    _reload_api_champion(log)
