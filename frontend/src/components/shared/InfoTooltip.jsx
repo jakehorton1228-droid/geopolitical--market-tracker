@@ -49,11 +49,17 @@ export function InfoTooltip({ term, short, long, className = '' }) {
             transition={{ duration: 0.15 }}
             className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 pointer-events-none"
           >
-            <span className="block glass-panel px-3 py-2 text-xs text-text-primary shadow-xl border border-white/10 rounded-lg">
-              <span className="block font-semibold text-text-primary mb-0.5">{term}</span>
-              <span className="block text-text-secondary">{short}</span>
+            <span
+              className="block px-3 py-2 text-xs rounded-lg shadow-2xl border border-white/15"
+              style={{ backgroundColor: '#0f172a', color: '#f1f5f9' }}
+            >
+              <span className="block font-semibold mb-1" style={{ color: '#f8fafc' }}>{term}</span>
+              <span className="block leading-snug" style={{ color: '#cbd5e1' }}>{short}</span>
               {long && (
-                <span className="block text-[10px] text-text-secondary/80 mt-1.5 leading-relaxed">
+                <span
+                  className="block text-[10px] mt-1.5 leading-relaxed"
+                  style={{ color: '#94a3b8' }}
+                >
                   {long}
                 </span>
               )}

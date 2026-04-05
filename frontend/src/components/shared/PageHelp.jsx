@@ -47,7 +47,10 @@ export function PageHelp({ title = 'How to read this page', description, lookFor
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="mt-3 glass-panel p-4 border-l-2 border-accent-blue/40 text-sm text-text-secondary space-y-3">
+            <div
+              className="mt-3 p-4 border-l-2 border-accent-blue/60 rounded-r-lg text-sm space-y-3"
+              style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', color: '#cbd5e1' }}
+            >
               {description && (
                 <p className="leading-relaxed">{description}</p>
               )}
