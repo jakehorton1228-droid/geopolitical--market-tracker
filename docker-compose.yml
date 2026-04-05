@@ -54,7 +54,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/geopolitical_tracker
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:26b}
       FRED_API_KEY: ${FRED_API_KEY:-}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}

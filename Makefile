@@ -137,9 +137,9 @@ up-api: ## Start database and API
 	docker compose up -d db api
 	@echo "$(GREEN)API started on http://localhost:8000$(NC)"
 
-pull-model: ## Pull Llama 3 model into Ollama
-	@echo "$(BLUE)Pulling Llama 3.1 8B model (this may take a few minutes)...$(NC)"
-	docker exec gmt-ollama ollama pull llama3.1:8b
+pull-model: ## Pull Gemma 4 model into Ollama
+	@echo "$(BLUE)Pulling Gemma 4 26B MoE model (~18GB, this may take several minutes)...$(NC)"
+	docker exec gmt-ollama ollama pull gemma4:26b
 	@echo "$(GREEN)Model ready.$(NC)"
 
 # ============================================================================
