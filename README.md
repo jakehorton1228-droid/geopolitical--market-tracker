@@ -9,11 +9,12 @@ This is a personal project focused on building a complete full-stack system from
 **Skills demonstrated:**
 - **Frontend**: React 19, Vite, Tailwind CSS, Recharts, Framer Motion, React Query, react-simple-maps
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic
-- **Data Science**: Correlation analysis, logistic regression, anomaly detection, statistical testing
-- **Machine Learning**: Trained and compared 6 models (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP, LSTM) with time-series aware train/val/test split and MLflow experiment tracking
-- **Data Engineering**: ETL pipelines (5 data sources), feature engineering pipeline (flat + windowed sequences), database design, REST API design
-- **AI Engineering**: Local LLM inference (Ollama + Gemma 4 26B MoE), LangGraph multi-agent orchestration, RAG pipelines, LangSmith observability, prompt engineering
-- **MLOps**: MLflow experiment tracking, weekly model retraining via Prefect
+- **Data Science**: Correlation analysis, logistic regression, anomaly detection, event studies (CAR), statistical testing
+- **Machine Learning**: Trained and compared 6 models (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP, LSTM) with time-series aware train/val/test split, feature engineering, and automated champion promotion
+- **MLOps**: MLflow experiment tracking and model registry, champion/challenger promotion, model loader with in-memory caching, weekly retraining via Prefect
+- **Data Engineering**: ETL pipelines (5 data sources), feature engineering pipeline (27 flat features + 30-day windowed sequences), database design, REST API design
+- **AI Engineering**: Local LLM inference (Ollama + Gemma 4 26B MoE on Apple Silicon Metal GPU), LangGraph multi-agent orchestration, RAG pipelines, LangSmith observability, prompt engineering
+- **UX**: Onboarding layer (inline tooltips + per-page help panels + plain-English glossary) so non-experts can navigate and interpret the data
 - **DevOps**: Docker, Docker Compose, nginx, Prefect orchestration, Makefile automation
 
 **Built with [Claude Code](https://claude.com/claude-code)** as an AI pair programmer.
@@ -22,16 +23,20 @@ This is a personal project focused on building a complete full-stack system from
 
 ### Pages
 
-- **Intelligence Briefing**: Flagship dashboard fusing all 5 data sources — FRED macro indicators, prediction market movers, fused event/price timeline, news headlines with sentiment, risk radar, and AI-generated summary panel
-- **Dashboard**: Overview of event counts, tracked symbols, strongest correlations, FRED economic indicator strip with animated counters, and recent high-impact events table
-- **Prediction Markets**: Browse geopolitical prediction markets from Polymarket — probabilities, 24h volume, sortable table with expandable probability trend charts
-- **Correlation Explorer**: See how event metrics (conflict count, Goldstein scores, media mentions) correlate with market returns across 33 symbols. Includes rolling correlation timeseries with confidence intervals and a multi-symbol heatmap
-- **Event Timeline**: Price charts overlaid with geopolitical event dots — red for conflict, green for cooperation. Drill-down table showing event details per day
-- **World Map**: Choropleth showing event intensity by country with drill-down details (Goldstein score, conflict/cooperation breakdown, media mentions)
-- **Signals**: Two levels of market direction prediction:
-  - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time"
-  - **Level 2 (Logistic Regression)**: "Based on today's event profile, probability of UP: 64%. Key drivers: Goldstein score, media coverage"
-- **AI Agent**: Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
+Pages are ordered in the sidebar to follow a natural user flow: start with today's briefing, explore where and when events happened, see what correlates, check predictions, then ask the AI freeform questions.
+
+- **Intelligence Briefing** *(landing page)* — Flagship dashboard fusing all 5 data sources: FRED macro indicators, prediction market movers, fused event/price timeline, news headlines with sentiment, risk radar, and an AI-generated summary grounded in RAG retrieval
+- **World Map** — Choropleth showing event intensity by country with drill-down details (Goldstein score, conflict/cooperation breakdown, media mentions)
+- **Event Timeline** — Price charts overlaid with geopolitical event dots — red for conflict, green for cooperation. Drill-down table showing event details per day
+- **Correlation Explorer** — Shows how event metrics (conflict count, Goldstein scores, media mentions) correlate with market returns across 33 symbols. Per-metric cards show strength (strong/moderate/weak) and significance in plain English, rolling correlation timeseries with confidence intervals, multi-symbol heatmap
+- **Signals** — Market direction predictions with two levels:
+  - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time" — pure conditional probability counting
+  - **Level 2 (ML Model)**: Predictions from the champion model loaded from MLflow. An **Active Model card** in the top-right shows the serving model, its test AUC, a "Champion" badge, and a link to MLflow for the full experiment comparison
+- **Prediction Markets** — Browse geopolitical prediction markets from Polymarket — probabilities, 24h volume, sortable table with expandable probability trend charts
+- **AI Agent** — Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
+- **Dashboard** — Platform overview: event counts, tracked symbols, strongest correlations, FRED economic indicator strip with animated counters, and recent high-impact events table
+
+Every page has a collapsible **"How to read this page"** panel explaining what the page is for, what to look for, and a glossary of domain terms used there. Every technical term (Goldstein scale, p-value, correlation coefficient, AUC, CAR, CAMEO, RAG, etc.) has an inline `?` tooltip with a plain-English definition pulled from a shared glossary.
 
 ### AI Agent (LangGraph Pipeline)
 
@@ -58,7 +63,7 @@ Start -> Supervisor -> Collection -> Supervisor -> Analysis -> Supervisor -> Dis
 
 ### ML Training Pipeline
 
-The project trains and compares 6 machine learning models for predicting significant market impact from geopolitical events:
+The project trains and compares 6 machine learning models for predicting significant market impact from geopolitical events. The winning sklearn-compatible model is automatically registered in MLflow's Model Registry as the **champion** and served by the Signals page.
 
 | Model | Type | Features |
 |-------|------|----------|
@@ -71,16 +76,42 @@ The project trains and compares 6 machine learning models for predicting signifi
 
 **Feature pipeline** (`analysis/ml_features.py`):
 - **Flat features (27)**: Event metrics (Goldstein scale, mentions, tone, conflict/cooperation counts), sentiment aggregates (FinBERT), market context (rolling volatility, momentum, volume), temporal (day of week, month), event velocity (rate of change)
-- **Windowed sequences (30 x 16)**: Same features over a sliding 30-day window, used for LSTM
+- **Windowed sequences (30 x 16)**: Same features over a sliding 30-day window, built per-symbol so every window is contiguous in time. Used by the LSTM.
 
 **Training** (`training/trainer.py`):
-- Time-series aware train/val/test split (70/15/15, no leakage)
-- Each model trained on the same dataset
-- All runs logged to MLflow: params, metrics (accuracy, precision, recall, F1, AUC-ROC), feature importance, classification reports
-- Best model selected by AUC-ROC on the held-out test set
+- Time-series aware train/val/test split (70/15/15, no leakage — chronological)
+- Each model trained on the same dataset with the same StandardScaler
+- All runs logged to MLflow: params, metrics (accuracy, precision, recall, F1, AUC-ROC on train/val/test splits), feature importance, classification reports, scaler + feature names as artifacts
 - Apple Silicon MPS acceleration for PyTorch models
+- **Champion promotion**: After training, the best sklearn-compatible model (highest test AUC) is registered in the MLflow Model Registry under the alias `champion`. Subsequent training runs only promote the new model if it beats the current champion's AUC (champion/challenger logic).
+
+**Model loader** (`src/ml/model_loader.py`):
+- Loads the champion from MLflow on first request, caches it in memory for subsequent requests
+- Applies the exact same StandardScaler and feature ordering used during training
+- Returns None gracefully if no champion is registered, so the app falls back to the legacy on-demand logistic regression
+
+**Serving predictions** (`api/routes/predictions.py`):
+- `POST /api/predictions/logistic` tries the champion first, falls back to the legacy `LogisticRegressionAnalyzer` if no champion exists
+- `GET /api/predictions/logistic/{symbol}/summary` returns champion metadata (model type, AUC, version, feature list) when one exists
+
+**Signals page integration:**
+- An **Active Model card** in the top-right shows the serving model name, test AUC, champion badge, and a "View all models in MLflow →" link
+- The Model Summary panel adapts its rendering depending on whether champion or legacy is serving (different fields in each response shape)
 
 **Orchestration:** Weekly retraining via Prefect (`flows/training_flow.py`). View all runs at `http://localhost:5000` (MLflow UI).
+
+**Latest training results (1 year of data, 33 symbols, ~6800 train / 1450 val / 1450 test):**
+
+| Model | test AUC | test F1 | test Accuracy | Notes |
+|-------|----------|---------|---------------|-------|
+| **random_forest** | **0.908** | **0.790** | **0.823** | Champion |
+| xgboost | 0.903 | 0.790 | 0.823 | |
+| lightgbm | 0.903 | 0.781 | 0.816 | |
+| logistic_regression | 0.877 | 0.720 | 0.783 | Baseline |
+| mlp | 0.830 | 0.707 | 0.791 | |
+| lstm | 0.580 | 0.000 | 0.419 | Collapsed to majority class on 1yr data |
+
+*Note: Those AUC numbers are unusually high for daily market direction prediction. A principled next step is auditing the feature pipeline for target leakage (features that inadvertently reveal information about the same day's return).*
 
 ### RAG System
 
@@ -90,6 +121,15 @@ The RAG pipeline provides contextual intelligence retrieval:
 - **Context Builder**: Formats retrieved documents into structured LLM context
 - **Briefing Context**: Multi-topic search across 5 geopolitical themes for situational awareness
 - **AI Summary Panel**: Gemma 4 generated intelligence briefing on the Briefing page
+
+### Onboarding Layer
+
+The app assumes no prior knowledge of finance or geopolitics jargon. Every page is designed to be approachable to a first-time visitor:
+
+- **Plain-English labels everywhere.** "Goldstein" becomes "Tone", "Mentions" becomes "Coverage", "Strongest Correlation (Pearson)" becomes "Strongest Event-Market Link."
+- **Inline `?` tooltips** on every technical term. Hover to see a plain-English definition. Definitions are sourced from `frontend/src/utils/glossary.js` — one source of truth for 22 terms covering stats, ML, event metrics, and data sources.
+- **Per-page "How to read this" panels** (collapsible). Each page explains what question it answers, what to look for, and defines the specific terms it uses. Collapsed by default so repeat users aren't slowed down.
+- **Interpretation of raw numbers.** The Correlation Explorer doesn't just show `0.184, p=0.032, n=1234` — it shows "Moderate · significant" alongside the raw values so newcomers know how to read them.
 
 ### Sentiment Analysis
 
@@ -123,18 +163,20 @@ All pages use Framer Motion for polished UI transitions:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    React Frontend (Vite + Framer Motion)           │
-│  Dashboard │ Briefing │ Predictions │ Correlations │ Timeline     │
-│  Map │ Signals │ Agent Chat                                        │
+│  Briefing │ World Map │ Timeline │ Correlations │ Signals         │
+│  Predictions │ Agent Chat │ Dashboard                              │
 │  Recharts │ React Query │ Tailwind │ React Simple Maps            │
+│  InfoTooltip + PageHelp onboarding layer                           │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │ /api proxy (nginx)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      FastAPI Backend                               │
 │  /api/events       │ /api/market        │ /api/analysis            │
-│  /api/correlation  │ /api/patterns      │ /api/predictions         │
+│  /api/correlation  │ /api/patterns      │ /api/predictions*        │
 │  /api/indicators   │ /api/headlines     │ /api/prediction-markets  │
 │  /api/briefing     │ /api/agent/chat                                │
+│                  * champion w/ legacy fallback                      │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
            ┌─────────────────────┼─────────────────────┐
@@ -149,16 +191,28 @@ All pages use Framer Motion for polished UI transitions:
 │  EconomicIndicators│  │ Sentiment      │  │   Dissemination (LLM)  │
 │  PredictionMarkets │  │ (FinBERT)      │  │                        │
 │  CorrelationCache  │  │ ML Features    │  │ Gemma 4 26B MoE        │
-│  AnalysisResults   │  │ (flat + seq)   │  │   via Ollama           │
-│  Embeddings (384d) │  │ RAG (pgvector) │  │ LangSmith tracing      │
-└────────────────────┘  └────────────────┘  └────────────────────────┘
+│  AnalysisResults   │  │ (flat + seq)   │  │   via native Ollama    │
+│  Embeddings (384d) │  │ RAG (pgvector) │  │   (Metal GPU accel.)   │
+└────────────────────┘  └────────────────┘  │ LangSmith tracing      │
+                                            └────────────────────────┘
 
 Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                  ML Training Pipeline (6 models)                   │
-│  LogReg │ Random Forest │ XGBoost │ LightGBM │ MLP │ LSTM         │
-│  All runs logged to MLflow (params, metrics, artifacts)            │
+│              ML Training Pipeline & Model Registry                 │
+│                                                                     │
+│   Feature Pipeline (27 flat + 30-day windows)                      │
+│        ↓                                                            │
+│   Train 6 models: LogReg, RF, XGBoost, LightGBM, MLP, LSTM         │
+│        ↓                                                            │
+│   Log runs to MLflow (params, metrics, artifacts, scaler)          │
+│        ↓                                                            │
+│   Champion promotion (best test AUC → Model Registry alias)        │
+│        ↓                                                            │
+│   Model Loader (src/ml) ← reads champion by alias                  │
+│        ↓                                                            │
+│   Signals page serves predictions from champion                    │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -166,6 +220,7 @@ Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 │  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →      │
 │                  Sentiment → Embeddings → Analysis                 │
 │  Weekly Pipeline: Feature Engineering → Model Training → MLflow    │
+│                   → Champion Promotion                             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -317,7 +372,11 @@ geopolitical--market-tracker/
 │   │   │   ├── synthesis.py            # Ollama client for LLM assessments
 │   │   │   └── logging_config.py       # Logging utilities
 │   │   ├── training/                   # ML model training
-│   │   │   └── trainer.py              # 6-model comparison with MLflow logging
+│   │   │   └── trainer.py              # 6-model comparison, MLflow logging,
+│   │   │                               #   champion/challenger promotion
+│   │   ├── ml/                         # ML runtime (inference layer)
+│   │   │   └── model_loader.py         # Loads champion from MLflow registry,
+│   │   │                               #   caches in memory, applies scaler
 │   │   ├── api/
 │   │   │   ├── main.py                 # FastAPI app + middleware
 │   │   │   ├── schemas.py              # Pydantic request/response models
@@ -351,12 +410,14 @@ geopolitical--market-tracker/
 │       │   │                           #   TopCorrelationsBar
 │       │   ├── cards/                  # MetricCard, PatternCard, PredictionCard
 │       │   └── shared/                 # SymbolSelector, DateRangePicker,
-│       │                               #   AnimatedNumber, Skeletons
-│       ├── pages/                      # Dashboard, IntelligenceBriefing,
-│       │                               #   PredictionMarkets, CorrelationExplorer,
-│       │                               #   EventTimeline, WorldMapView, Signals,
-│       │                               #   AgentChat
-│       └── utils/                      # Constants, formatters, animation presets
+│       │                               #   AnimatedNumber, Skeletons,
+│       │                               #   InfoTooltip, PageHelp
+│       ├── pages/                      # IntelligenceBriefing (landing),
+│       │                               #   WorldMapView, EventTimeline,
+│       │                               #   CorrelationExplorer, Signals,
+│       │                               #   PredictionMarkets, AgentChat, Dashboard
+│       └── utils/                      # Constants, formatters, animations,
+│                                       #   glossary (22 plain-English term defs)
 │
 ├── .env.example                        # Environment variable template
 ├── docs/                               # Architecture diagrams and roadmap
@@ -415,6 +476,9 @@ geopolitical--market-tracker/
 | G | Local LLM swap — replaced Anthropic API with Ollama + Gemma 4 26B MoE, deterministic collection/analysis nodes | Done |
 | H | ML training pipeline — feature engineering (flat + windowed), 6 models (LogReg, RF, XGBoost, LightGBM, MLP, LSTM), MLflow tracking | Done |
 | I | LangSmith observability — full tracing on LangGraph pipeline | Done |
+| J | Native Ollama (Metal GPU acceleration) — moved LLM out of Docker for 20-100x faster inference on Apple Silicon | Done |
+| K | Onboarding layer — InfoTooltip + PageHelp components, glossary of 22 terms, plain-English labels, navigation reorder | Done |
+| L | Champion model deployment — MLflow model registry with champion alias, model loader with caching, Signals page serves champion predictions with MLflow deep-link | Done |
 
 ## License
 
