@@ -1,5 +1,5 @@
 /**
- * AI Agent API hook — multi-agent intelligence pipeline chat.
+ * AI Analyst API hook — multi-agent intelligence pipeline chat.
  *
  * - useAgentChat() — Full chat state management:
  *   - messages[]     — Conversation history (user + assistant messages)

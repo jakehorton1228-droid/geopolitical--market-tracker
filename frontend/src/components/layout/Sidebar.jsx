@@ -7,7 +7,7 @@ import { NavLink } from 'react-router-dom'
 //   4. Correlations — Which event types reliably move which markets?
 //   5. Signals     — What do the models predict?
 //   6. Predictions — What does the crowd (Polymarket) think?
-//   7. AI Agent    — Ask anything
+//   7. AI Analyst  — Ask anything
 //   8. Dashboard   — Platform overview (system stats)
 const NAV_ITEMS = [
   { to: '/briefing', label: 'Briefing', icon: '◉' },
@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/correlation', label: 'Correlations', icon: '⊘' },
   { to: '/signals', label: 'Signals', icon: '⊗' },
   { to: '/markets', label: 'Predictions', icon: '◎' },
-  { to: '/agent', label: 'AI Agent', icon: '◈' },
+  { to: '/agent', label: 'AI Analyst', icon: '◈' },
   { to: '/dashboard', label: 'Dashboard', icon: '⊞' },
 ]
 

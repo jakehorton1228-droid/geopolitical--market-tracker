@@ -33,12 +33,12 @@ Pages are ordered in the sidebar to follow a natural user flow: start with today
   - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time" — pure conditional probability counting
   - **Level 2 (ML Model)**: Predictions from the champion model loaded from MLflow. An **Active Model card** in the top-right shows the serving model, its test AUC, a "Champion" badge, and a link to MLflow for the full experiment comparison
 - **Prediction Markets** — Browse geopolitical prediction markets from Polymarket — probabilities, 24h volume, sortable table with expandable probability trend charts
-- **AI Agent** — Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
+- **AI Analyst** — Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
 - **Dashboard** — Platform overview: event counts, tracked symbols, strongest correlations, FRED economic indicator strip with animated counters, and recent high-impact events table
 
 Every page has a collapsible **"How to read this page"** panel explaining what the page is for, what to look for, and a glossary of domain terms used there. Every technical term (Goldstein scale, p-value, correlation coefficient, AUC, CAR, CAMEO, RAG, etc.) has an inline `?` tooltip with a plain-English definition pulled from a shared glossary.
 
-### AI Agent (LangGraph Pipeline)
+### AI Analyst (LangGraph Pipeline)
 
 A LangGraph intelligence pipeline that combines deterministic data operations with local LLM synthesis. The supervisor uses state-based routing (no LLM needed for routing), and only the final dissemination node calls the LLM — keeping the system fast, reliable, and cheap to run.
 

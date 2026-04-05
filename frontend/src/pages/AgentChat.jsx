@@ -1,5 +1,5 @@
 /**
- * AI Agent Chat page — conversational interface to the intelligence pipeline.
+ * AI Analyst Chat page — conversational interface to the intelligence pipeline.
  *
  * Features:
  * - Full chat UI with user/assistant message bubbles
