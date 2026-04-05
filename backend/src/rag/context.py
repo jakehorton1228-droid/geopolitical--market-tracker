@@ -37,6 +37,8 @@ USAGE:
 import logging
 from datetime import date, timedelta
 
+from langsmith import traceable
+
 from src.rag.retriever import Retriever, RetrievedDoc
 
 logger = logging.getLogger(__name__)
@@ -99,6 +101,7 @@ class ContextBuilder:
 
         return self._format_docs(docs, query)
 
+    @traceable(run_type="retriever", name="build_briefing_context")
     def build_briefing_context(
         self,
         topics: list[str] | None = None,

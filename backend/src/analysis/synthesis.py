@@ -22,6 +22,7 @@ Called by:
 import logging
 
 import ollama
+from langsmith import traceable
 
 from src.config.settings import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_MAX_TOKENS
 
@@ -104,6 +105,7 @@ def _extract_content(response: dict) -> str:
     return ""
 
 
+@traceable(run_type="llm", name="generate_assessment", metadata={"model": OLLAMA_MODEL})
 def generate_assessment(structured_data: str) -> str:
     """Generate an intelligence assessment from structured analysis data.
 
@@ -144,6 +146,7 @@ def generate_assessment(structured_data: str) -> str:
         return f"Assessment generation unavailable: {e}"
 
 
+@traceable(run_type="llm", name="generate_briefing", metadata={"model": OLLAMA_MODEL})
 def generate_briefing(rag_context: str) -> str:
     """Generate a situational awareness briefing from RAG context.
 
