@@ -35,6 +35,45 @@ function accuracyColor(acc) {
   return 'text-accent-red'
 }
 
+/** Badge showing which model is serving predictions + link to MLflow. */
+function ActiveModelCard({ summary }) {
+  const modelName = summary?.model_name || 'Logistic Regression'
+  const modelSource = summary?.model_source || 'legacy'
+  const metric = summary?.auc != null ? `AUC ${summary.auc.toFixed(3)}` :
+    summary?.accuracy != null ? `Accuracy ${(summary.accuracy * 100).toFixed(1)}%` : null
+  const isChampion = modelSource === 'champion'
+
+  return (
+    <div className="glass-panel px-4 py-3 min-w-[240px]">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <span className="text-[10px] uppercase tracking-wider text-text-secondary font-mono">
+          Serving Predictions
+        </span>
+        {isChampion && (
+          <span className="text-[9px] uppercase tracking-wider font-mono text-accent-green bg-accent-green/10 px-1.5 py-0.5 rounded">
+            Champion
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm font-semibold text-text-primary capitalize">{modelName}</span>
+        {metric && (
+          <span className="text-[11px] font-mono text-text-secondary">· {metric}</span>
+        )}
+      </div>
+      <a
+        href="http://localhost:5000"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-[11px] text-accent-blue hover:text-accent-blue/80 transition-colors"
+      >
+        <span>View all models in MLflow</span>
+        <span>→</span>
+      </a>
+    </div>
+  )
+}
+
 export default function Signals() {
   const [symbol, setSymbol] = useState('CL=F')
   const [showMethodology, setShowMethodology] = useState(false)
@@ -65,11 +104,14 @@ export default function Signals() {
 
   return (
     <div className="space-y-6">
-      <motion.div {...fadeInUp}>
-        <h2 className="text-2xl font-bold text-text-primary">Market Signals</h2>
-        <p className="text-sm text-text-secondary mt-1">
-          Can past events predict future moves? Two approaches: simple historical frequency ("when X happens, the market goes UP 62% of the time") and a trained ML model.
-        </p>
+      <motion.div {...fadeInUp} className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold text-text-primary">Market Signals</h2>
+          <p className="text-sm text-text-secondary mt-1 max-w-2xl">
+            Can past events predict future moves? Two approaches: simple historical frequency ("when X happens, the market goes UP 62% of the time") and a trained ML model.
+          </p>
+        </div>
+        <ActiveModelCard summary={modelSummary} />
       </motion.div>
 
       <PageHelp

@@ -326,37 +326,38 @@ class MLFeaturePipeline:
         Returns dict with X_train, X_val, X_test (3D arrays),
         y_train, y_val, y_test, feature_names.
         """
+        # Build features per symbol separately, then build windows WITHIN each
+        # symbol so every window is contiguous in time and comes from one asset
         all_dfs = []
         for symbol in symbols:
             df = self._build_daily_features(symbol, start_date, end_date)
             if not df.empty:
-                all_dfs.append(df)
+                all_dfs.append(df.sort_values("date").reset_index(drop=True))
 
         if not all_dfs:
             raise ValueError("No data available for any symbol")
 
-        combined = pd.concat(all_dfs, ignore_index=True)
-        combined = combined.sort_values("date").reset_index(drop=True)
-
-        # Build sliding windows
         feature_cols = self.SEQUENCE_FEATURE_COLS
         X_windows = []
         y_windows = []
         dates_windows = []
 
-        for i in range(window_size, len(combined)):
-            window = combined.iloc[i - window_size:i]
-
-            # Only create window if it's contiguous (same symbol, no gaps > 5 days)
-            if window["symbol"].nunique() > 1:
+        for symbol_df in all_dfs:
+            if len(symbol_df) <= window_size:
                 continue
-            date_range = (window["date"].max() - window["date"].min()).days
-            if date_range > window_size * 2:  # Too many gaps
-                continue
+            # Within this symbol's rows, slide a window_size-day window
+            for i in range(window_size, len(symbol_df)):
+                window = symbol_df.iloc[i - window_size:i]
+                target_row = symbol_df.iloc[i]
 
-            X_windows.append(window[feature_cols].values)
-            y_windows.append(combined.iloc[i]["target"])
-            dates_windows.append(combined.iloc[i]["date"])
+                # Reject windows with large gaps (weekends are fine, not months)
+                date_range = (window["date"].max() - window["date"].min()).days
+                if date_range > window_size * 2:
+                    continue
+
+                X_windows.append(window[feature_cols].values)
+                y_windows.append(target_row["target"])
+                dates_windows.append(target_row["date"])
 
         if not X_windows:
             raise ValueError("No valid windows could be created")

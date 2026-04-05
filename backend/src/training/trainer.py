@@ -16,15 +16,20 @@ USAGE:
     print(results["best_model"])  # Name of the best model
 """
 
+import json
 import logging
+import tempfile
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import joblib
 import mlflow
 import mlflow.sklearn
 import mlflow.xgboost
 import mlflow.lightgbm
+from mlflow.tracking import MlflowClient
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -44,6 +49,10 @@ from src.config.settings import MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME
 from src.analysis.ml_features import MLFeaturePipeline
 
 logger = logging.getLogger(__name__)
+
+# Name under which the winning model is registered in the MLflow Model Registry
+CHAMPION_MODEL_NAME = "gmip-event-impact-champion"
+CHAMPION_ALIAS = "champion"
 
 # Symbols to train on — diversified across asset classes
 DEFAULT_SYMBOLS = [
@@ -66,6 +75,10 @@ class ModelTrainer:
         self.end_date = end_date or date.today()
         self.pipeline = MLFeaturePipeline()
 
+        # Preprocessing state — populated during run_all() before training
+        self._scaler: StandardScaler | None = None
+        self._feature_names: list[str] = []
+
         # Set up MLflow
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
@@ -77,15 +90,21 @@ class ModelTrainer:
             comparison: DataFrame of model metrics
             best_model: name of the best model by AUC-ROC
             results: dict of model_name -> metrics dict
+            run_ids: dict of model_name -> MLflow run_id
+            champion: name of the model registered as champion
         """
         logger.info(f"Building datasets for {len(self.symbols)} symbols...")
 
         # Build datasets
         flat_data = self.pipeline.build_flat_dataset(
-            self.symbols, self.start_date, self.end_date
+            self.symbols,
+            start_date=self.start_date,
+            end_date=self.end_date,
         )
         seq_data = self.pipeline.build_sequence_dataset(
-            self.symbols, self.start_date, self.end_date
+            self.symbols,
+            start_date=self.start_date,
+            end_date=self.end_date,
         )
 
         logger.info(
@@ -104,10 +123,15 @@ class ModelTrainer:
         X_val_scaled = scaler.transform(flat_data["X_val"])
         X_test_scaled = scaler.transform(flat_data["X_test"])
 
+        # Store the scaler + feature names so inference uses the same pipeline
+        self._scaler = scaler
+        self._feature_names = flat_data["feature_names"]
+
         results = {}
+        run_ids = {}
 
         # --- 1. Logistic Regression (baseline) ---
-        results["logistic_regression"] = self._train_sklearn(
+        results["logistic_regression"], run_ids["logistic_regression"] = self._train_sklearn(
             name="logistic_regression",
             model=LogisticRegression(max_iter=1000, random_state=42),
             X_train=X_train_scaled,
@@ -121,7 +145,7 @@ class ModelTrainer:
         )
 
         # --- 2. Random Forest ---
-        results["random_forest"] = self._train_sklearn(
+        results["random_forest"], run_ids["random_forest"] = self._train_sklearn(
             name="random_forest",
             model=RandomForestClassifier(
                 n_estimators=200, max_depth=10, random_state=42, n_jobs=-1,
@@ -141,7 +165,7 @@ class ModelTrainer:
         )
 
         # --- 3. XGBoost ---
-        results["xgboost"] = self._train_xgboost(
+        results["xgboost"], run_ids["xgboost"] = self._train_xgboost(
             X_train=X_train_scaled,
             X_val=X_val_scaled,
             X_test=X_test_scaled,
@@ -152,7 +176,7 @@ class ModelTrainer:
         )
 
         # --- 4. LightGBM ---
-        results["lightgbm"] = self._train_lightgbm(
+        results["lightgbm"], run_ids["lightgbm"] = self._train_lightgbm(
             X_train=X_train_scaled,
             X_val=X_val_scaled,
             X_test=X_test_scaled,
@@ -163,7 +187,7 @@ class ModelTrainer:
         )
 
         # --- 5. MLP ---
-        results["mlp"] = self._train_mlp(
+        results["mlp"], run_ids["mlp"] = self._train_mlp(
             X_train=X_train_scaled,
             X_val=X_val_scaled,
             X_test=X_test_scaled,
@@ -174,7 +198,7 @@ class ModelTrainer:
         )
 
         # --- 6. LSTM ---
-        results["lstm"] = self._train_lstm(
+        results["lstm"], run_ids["lstm"] = self._train_lstm(
             seq_data=seq_data,
         )
 
@@ -183,13 +207,141 @@ class ModelTrainer:
         comparison = comparison.sort_values("test_auc", ascending=False)
 
         best_model = comparison.index[0]
-        logger.info(f"Best model: {best_model} (AUC={comparison.loc[best_model, 'test_auc']:.4f})")
+        best_auc = comparison.loc[best_model, "test_auc"]
+        logger.info(f"Best model: {best_model} (AUC={best_auc:.4f})")
+
+        # Register the champion in MLflow Model Registry
+        # Only tree / sklearn models are registered — PyTorch models need
+        # different loading code and aren't wired up yet
+        champion_registered = None
+        if best_model in run_ids and best_model not in {"mlp", "lstm"}:
+            champion_registered = self._register_champion(
+                run_id=run_ids[best_model],
+                model_name=best_model,
+                test_auc=best_auc,
+            )
+        else:
+            logger.info(
+                f"Best model '{best_model}' is a PyTorch model. Champion registry "
+                f"currently only supports sklearn-compatible models — skipping."
+            )
+            # Fall back to the best sklearn-compatible model
+            sklearn_models = ["xgboost", "lightgbm", "random_forest", "logistic_regression"]
+            for sk in sklearn_models:
+                if sk in comparison.index:
+                    fallback_auc = comparison.loc[sk, "test_auc"]
+                    logger.info(f"Registering {sk} (AUC={fallback_auc:.4f}) as champion instead")
+                    champion_registered = self._register_champion(
+                        run_id=run_ids[sk],
+                        model_name=sk,
+                        test_auc=fallback_auc,
+                    )
+                    break
 
         return {
             "comparison": comparison,
             "best_model": best_model,
             "results": results,
+            "run_ids": run_ids,
+            "champion": champion_registered,
         }
+
+    # ------------------------------------------------------------------
+    # MLflow artifacts and model registry
+    # ------------------------------------------------------------------
+
+    def _log_preprocessing_artifacts(self, feature_names: list[str]) -> None:
+        """Log the StandardScaler and feature names so predictions use the same pipeline.
+
+        Called inside every active MLflow run. The scaler and feature list are
+        saved as artifacts so the model loader can reconstruct the exact
+        preprocessing the model was trained with.
+        """
+        if self._scaler is None:
+            return
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+
+            # Save the fitted scaler
+            scaler_path = tmp_path / "scaler.joblib"
+            joblib.dump(self._scaler, scaler_path)
+            mlflow.log_artifact(str(scaler_path), artifact_path="preprocessing")
+
+            # Save feature names
+            features_path = tmp_path / "feature_names.json"
+            features_path.write_text(json.dumps(feature_names))
+            mlflow.log_artifact(str(features_path), artifact_path="preprocessing")
+
+    def _register_champion(
+        self, run_id: str, model_name: str, test_auc: float,
+    ) -> dict | None:
+        """Register the best model in MLflow Model Registry under the champion alias.
+
+        If the current champion has a higher test AUC, the new model is still
+        registered as a new version, but does NOT get the champion alias.
+        This implements simple champion/challenger promotion.
+        """
+        try:
+            client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
+
+            # Register the new model version
+            model_uri = f"runs:/{run_id}/model"
+            registered = mlflow.register_model(
+                model_uri=model_uri,
+                name=CHAMPION_MODEL_NAME,
+                tags={
+                    "model_type": model_name,
+                    "test_auc": f"{test_auc:.4f}",
+                },
+            )
+            new_version = registered.version
+            logger.info(
+                f"Registered {model_name} as {CHAMPION_MODEL_NAME} v{new_version} "
+                f"(AUC={test_auc:.4f})"
+            )
+
+            # Check if an existing champion exists
+            try:
+                current_champion = client.get_model_version_by_alias(
+                    CHAMPION_MODEL_NAME, CHAMPION_ALIAS,
+                )
+                current_auc = float(current_champion.tags.get("test_auc", 0))
+                logger.info(
+                    f"Current champion: v{current_champion.version} (AUC={current_auc:.4f})"
+                )
+                if test_auc <= current_auc:
+                    logger.info(
+                        f"New model AUC {test_auc:.4f} does not beat current "
+                        f"champion {current_auc:.4f}. Keeping existing champion."
+                    )
+                    return {
+                        "model_name": current_champion.tags.get("model_type"),
+                        "version": current_champion.version,
+                        "test_auc": current_auc,
+                        "promoted": False,
+                    }
+            except Exception:
+                # No existing champion — this is the first training run
+                logger.info("No existing champion — promoting this model as first champion.")
+
+            # Promote to champion
+            client.set_registered_model_alias(
+                name=CHAMPION_MODEL_NAME,
+                alias=CHAMPION_ALIAS,
+                version=new_version,
+            )
+            logger.info(f"Promoted v{new_version} ({model_name}) to champion")
+
+            return {
+                "model_name": model_name,
+                "version": new_version,
+                "test_auc": test_auc,
+                "promoted": True,
+            }
+        except Exception as e:
+            logger.error(f"Champion registration failed: {e}")
+            return None
 
     # ------------------------------------------------------------------
     # sklearn models (LogReg, RF)
@@ -203,11 +355,14 @@ class ModelTrainer:
         y_train, y_val, y_test,
         feature_names: list[str],
         params: dict,
-    ) -> dict:
-        """Train a sklearn classifier and log to MLflow."""
+    ) -> tuple[dict, str]:
+        """Train a sklearn classifier and log to MLflow.
+
+        Returns (metrics, run_id).
+        """
         logger.info(f"Training {name}...")
 
-        with mlflow.start_run(run_name=name):
+        with mlflow.start_run(run_name=name) as run:
             mlflow.log_params(params)
             mlflow.log_param("n_train", len(X_train))
             mlflow.log_param("n_features", X_train.shape[1])
@@ -221,8 +376,9 @@ class ModelTrainer:
             )
 
             mlflow.sklearn.log_model(model, "model")
+            self._log_preprocessing_artifacts(feature_names)
 
-        return metrics
+        return metrics, run.info.run_id
 
     # ------------------------------------------------------------------
     # XGBoost
@@ -230,7 +386,7 @@ class ModelTrainer:
 
     def _train_xgboost(
         self, X_train, X_val, X_test, y_train, y_val, y_test, feature_names,
-    ) -> dict:
+    ) -> tuple[dict, str]:
         """Train XGBoost with early stopping on validation set."""
         logger.info("Training xgboost...")
 
@@ -243,7 +399,7 @@ class ModelTrainer:
             "colsample_bytree": 0.8,
         }
 
-        with mlflow.start_run(run_name="xgboost"):
+        with mlflow.start_run(run_name="xgboost") as run:
             mlflow.log_params(params)
             mlflow.log_param("n_train", len(X_train))
             mlflow.log_param("n_features", X_train.shape[1])
@@ -272,8 +428,9 @@ class ModelTrainer:
             )
 
             mlflow.xgboost.log_model(model, "model")
+            self._log_preprocessing_artifacts(feature_names)
 
-        return metrics
+        return metrics, run.info.run_id
 
     # ------------------------------------------------------------------
     # LightGBM
@@ -281,7 +438,7 @@ class ModelTrainer:
 
     def _train_lightgbm(
         self, X_train, X_val, X_test, y_train, y_val, y_test, feature_names,
-    ) -> dict:
+    ) -> tuple[dict, str]:
         """Train LightGBM with early stopping on validation set."""
         logger.info("Training lightgbm...")
 
@@ -295,7 +452,7 @@ class ModelTrainer:
             "num_leaves": 31,
         }
 
-        with mlflow.start_run(run_name="lightgbm"):
+        with mlflow.start_run(run_name="lightgbm") as run:
             mlflow.log_params(params)
             mlflow.log_param("n_train", len(X_train))
             mlflow.log_param("n_features", X_train.shape[1])
@@ -324,8 +481,9 @@ class ModelTrainer:
             )
 
             mlflow.lightgbm.log_model(model, "model")
+            self._log_preprocessing_artifacts(feature_names)
 
-        return metrics
+        return metrics, run.info.run_id
 
     # ------------------------------------------------------------------
     # MLP (PyTorch)
@@ -333,7 +491,7 @@ class ModelTrainer:
 
     def _train_mlp(
         self, X_train, X_val, X_test, y_train, y_val, y_test, feature_names,
-    ) -> dict:
+    ) -> tuple[dict, str]:
         """Train a simple MLP in PyTorch."""
         logger.info("Training mlp...")
         import torch
@@ -365,7 +523,7 @@ class ModelTrainer:
             def forward(self, x):
                 return self.net(x)
 
-        with mlflow.start_run(run_name="mlp"):
+        with mlflow.start_run(run_name="mlp") as run:
             mlflow.log_params(params)
             mlflow.log_param("n_train", len(X_train))
             mlflow.log_param("n_features", X_train.shape[1])
@@ -405,14 +563,15 @@ class ModelTrainer:
                 model, device, X_train, X_val, X_test,
                 y_train, y_val, y_test, feature_names,
             )
+            self._log_preprocessing_artifacts(feature_names)
 
-        return metrics
+        return metrics, run.info.run_id
 
     # ------------------------------------------------------------------
     # LSTM (PyTorch)
     # ------------------------------------------------------------------
 
-    def _train_lstm(self, seq_data: dict) -> dict:
+    def _train_lstm(self, seq_data: dict) -> tuple[dict, str]:
         """Train an LSTM on windowed sequences."""
         logger.info("Training lstm...")
         import torch
@@ -449,7 +608,7 @@ class ModelTrainer:
                 last_hidden = lstm_out[:, -1, :]
                 return self.fc(last_hidden)
 
-        with mlflow.start_run(run_name="lstm"):
+        with mlflow.start_run(run_name="lstm") as run:
             mlflow.log_params(params)
             mlflow.log_param("n_train", len(seq_data["X_train"]))
             mlflow.log_param("n_features", seq_data["X_train"].shape[2])
@@ -491,7 +650,7 @@ class ModelTrainer:
                 model, device, seq_data,
             )
 
-        return metrics
+        return metrics, run.info.run_id
 
     # ------------------------------------------------------------------
     # Shared evaluation helpers

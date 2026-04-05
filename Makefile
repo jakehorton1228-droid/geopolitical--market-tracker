@@ -287,7 +287,7 @@ pipeline: ## Run the daily pipeline manually (ingestion + analysis)
 
 train: ## Train all ML models and log to MLflow
 	@echo "$(BLUE)Running model training pipeline...$(NC)"
-	docker exec gmt-api python -m flows.training_flow
+	docker exec gmt-worker python -m flows.training_flow
 	@echo "$(GREEN)Training complete. View results at http://localhost:5000$(NC)"
 
 prefect-logs: ## View Prefect worker logs
