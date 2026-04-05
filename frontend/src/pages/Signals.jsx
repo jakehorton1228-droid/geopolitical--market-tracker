@@ -259,21 +259,21 @@ export default function Signals() {
         <div>
           <h2 className="text-2xl font-bold text-text-primary">Market Signals</h2>
           <p className="text-sm text-text-secondary mt-1 max-w-2xl">
-            Can past events predict future moves? Two approaches: simple historical frequency ("when X happens, the market goes UP 62% of the time") and a trained ML model.
+            When a significant geopolitical event occurs, how do affected assets respond? Two approaches: counting historical occurrences (Level 1) and an ML model trained on event-impact pairs (Level 2).
           </p>
         </div>
         <ActiveModelCard summary={modelSummary} />
       </motion.div>
 
       <PageHelp
-        description="This page tests whether geopolitical events have predictive power for market direction. The patterns below come from counting past occurrences; the model learns to combine multiple signals. Neither beats random by much — markets are noisy — but any edge above 50% is meaningful."
+        description="This page tackles a hard question: can we predict how an asset will move in the days following a major geopolitical event? The patterns below count historical outcomes conditional on event type. The ML model is trained on (event, affected asset) pairs filtered to high-severity events (|Goldstein| ≥ 5 AND coverage ≥ 1000 mentions). Daily market direction is inherently near-random; any honest edge above 50% is real signal."
         lookFor={[
-          'Pattern cards with UP% far from 50% and low p-values (strong signal)',
-          'Model accuracy above the 50% random baseline — even 53-55% is useful',
-          'Feature importance — which event metrics the model relies on most',
-          'Large training sample size (n > 1,000) — the model has seen enough data to be trusted',
+          'Pattern cards with UP% far from 50% and low p-values — these are statistically reliable historical tendencies',
+          'Model AUC above 0.52 — modest but real edge on a genuinely hard problem',
+          'Feature importance showing event severity and coverage mattering more than asset context',
+          'Reality check: daily market prediction is hard; professional quants get 0.55 AUC and make careers of it',
         ]}
-        terms={[GLOSSARY.accuracy, GLOSSARY.logisticRegression, GLOSSARY.featureImportance, GLOSSARY.crossValidation, GLOSSARY.pvalue]}
+        terms={[GLOSSARY.accuracy, GLOSSARY.auc, GLOSSARY.logisticRegression, GLOSSARY.featureImportance, GLOSSARY.pvalue, GLOSSARY.goldstein]}
       />
 
       {/* How This Works — collapsible methodology panel */}
@@ -311,12 +311,14 @@ export default function Signals() {
                     </p>
                   </div>
                   <div>
-                    <p className="font-medium text-text-primary mb-1">Level 2 — Logistic Regression</p>
+                    <p className="font-medium text-text-primary mb-1">Level 2 — Event-Impact ML Model</p>
                     <p>
-                      Trains a binary classification model (sklearn LogisticRegression) on 7 event-based
-                      features to predict market direction. Evaluated with 5-fold cross-validation.
-                      Features: Goldstein mean/min/max, total mentions, average tone, conflict count,
-                      cooperation count.
+                      Trains 5 classifiers (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP)
+                      on a dataset of (significant event, affected asset) pairs. Each training row
+                      represents one event filtered to high severity (|Goldstein| ≥ 5 AND ≥ 1000 mentions)
+                      paired with an asset sensitive to the event's country. Target: did the asset move
+                      UP over the next 3 trading days? The best model by test AUC is promoted to
+                      "champion" in the MLflow Model Registry and served to this page.
                     </p>
                   </div>
                   <div>

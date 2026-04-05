@@ -46,7 +46,7 @@ import xgboost as xgb
 import lightgbm as lgb
 
 from src.config.settings import MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME
-from src.analysis.ml_features import MLFeaturePipeline
+from src.analysis.event_features import EventFeaturePipeline
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +70,12 @@ class ModelTrainer:
         start_date: date = None,
         end_date: date = None,
     ):
+        # symbols is kept for backward compat but the event pipeline uses
+        # all symbols derived from COUNTRY_ASSET_MAP
         self.symbols = symbols or DEFAULT_SYMBOLS
         self.start_date = start_date or date(2016, 1, 1)
         self.end_date = end_date or date.today()
-        self.pipeline = MLFeaturePipeline()
+        self.pipeline = EventFeaturePipeline()
 
         # Preprocessing state — populated during run_all() before training
         self._scaler: StandardScaler | None = None
@@ -84,7 +86,7 @@ class ModelTrainer:
         mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
     def run_all(self) -> dict:
-        """Train all 6 models and return comparison results.
+        """Train all 5 models on the event-centered dataset.
 
         Returns dict with:
             comparison: DataFrame of model metrics
@@ -93,39 +95,33 @@ class ModelTrainer:
             run_ids: dict of model_name -> MLflow run_id
             champion: name of the model registered as champion
         """
-        logger.info(f"Building datasets for {len(self.symbols)} symbols...")
+        logger.info("Building event-centered dataset...")
 
-        # Build datasets
-        flat_data = self.pipeline.build_flat_dataset(
-            self.symbols,
-            start_date=self.start_date,
-            end_date=self.end_date,
-        )
-        seq_data = self.pipeline.build_sequence_dataset(
-            self.symbols,
+        data = self.pipeline.build_dataset(
             start_date=self.start_date,
             end_date=self.end_date,
         )
 
         logger.info(
-            f"Flat: {flat_data['X_train'].shape[0]} train, "
-            f"{flat_data['X_val'].shape[0]} val, "
-            f"{flat_data['X_test'].shape[0]} test"
-        )
-        logger.info(
-            f"Sequences: {seq_data['X_train'].shape[0]} train, "
-            f"window={seq_data['window_size']}"
+            f"Dataset: {data['X_train'].shape[0]} train, "
+            f"{data['X_val'].shape[0]} val, "
+            f"{data['X_test'].shape[0]} test "
+            f"(from {data['n_events']} significant events, "
+            f"{data['n_samples']} event-asset pairs)"
         )
 
-        # Scale flat features (shared across flat models)
+        # Scale features (shared across all models)
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(flat_data["X_train"])
-        X_val_scaled = scaler.transform(flat_data["X_val"])
-        X_test_scaled = scaler.transform(flat_data["X_test"])
+        X_train_scaled = scaler.fit_transform(data["X_train"])
+        X_val_scaled = scaler.transform(data["X_val"])
+        X_test_scaled = scaler.transform(data["X_test"])
 
         # Store the scaler + feature names so inference uses the same pipeline
         self._scaler = scaler
-        self._feature_names = flat_data["feature_names"]
+        self._feature_names = data["feature_names"]
+
+        # Alias for convenience — the rest of the method uses this name
+        flat_data = data
 
         results = {}
         run_ids = {}
@@ -197,10 +193,9 @@ class ModelTrainer:
             feature_names=flat_data["feature_names"],
         )
 
-        # --- 6. LSTM ---
-        results["lstm"], run_ids["lstm"] = self._train_lstm(
-            seq_data=seq_data,
-        )
+        # LSTM is dropped in the event-centered framing — there are no
+        # sequences to feed it. Each training row is a single event, not
+        # a 30-day window of daily features.
 
         # Build comparison table
         comparison = pd.DataFrame(results).T
