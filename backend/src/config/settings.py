@@ -71,7 +71,7 @@ POLYMARKET_REQUEST_TIMEOUT = 30
 
 # LLM (Ollama — local inference)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:26b")
 OLLAMA_MAX_TOKENS = 4096
 
 # LangSmith (LLM observability)
