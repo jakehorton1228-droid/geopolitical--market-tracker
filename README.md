@@ -469,23 +469,6 @@ geopolitical--market-tracker/
 
 **Ollama runs natively on the host** (not in Docker) to use Metal GPU acceleration on Apple Silicon. Docker Desktop for Mac can't pass through the GPU, so containerized LLM inference is CPU-only. Running Ollama natively is 20-100x faster for models the size of Gemma 4 26B. Docker containers reach Ollama via `http://host.docker.internal:11434`.
 
-## Development Phases
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| A | Animation foundation, new API endpoints, Prediction Markets page | Done |
-| B | Intelligence Briefing (6-panel layout, fused timeline, risk radar, AI summary) | Done |
-| C | Visual polish — Framer Motion on all pages, FRED cards on Dashboard | Done |
-| D | Sentiment analysis — pgvector, headline NLP, semantic search, glassmorphism UI | Done |
-| E | RAG system — embeddings pipeline, vector search, context builder, AI Summary panel | Done |
-| F | Multi-agent — LangGraph supervisor graph, specialist agents, chat UI | Done |
-| G | Local LLM swap — replaced Anthropic API with Ollama + Gemma 4 26B MoE, deterministic collection/analysis nodes | Done |
-| H | ML training pipeline — event-impact prediction, 5 models (LogReg, RF, XGBoost, LightGBM, MLP), MLflow tracking, target leakage audit | Done |
-| I | LangSmith observability — full tracing on LangGraph pipeline | Done |
-| J | Native Ollama (Metal GPU acceleration) — moved LLM out of Docker for 20-100x faster inference on Apple Silicon | Done |
-| K | Onboarding layer — InfoTooltip + PageHelp components, glossary of 22 terms, plain-English labels, navigation reorder | Done |
-| L | Champion model deployment — MLflow model registry with champion alias, model loader with caching, Signals page serves champion predictions with MLflow deep-link | Done |
-
 ## License
 
 MIT
