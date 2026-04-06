@@ -10,9 +10,9 @@ This is a personal project focused on building a complete full-stack system from
 - **Frontend**: React 19, Vite, Tailwind CSS, Recharts, Framer Motion, React Query, react-simple-maps
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic
 - **Data Science**: Correlation analysis, logistic regression, anomaly detection, event studies (CAR), statistical testing
-- **Machine Learning**: Trained and compared 6 models (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP, LSTM) with time-series aware train/val/test split, feature engineering, and automated champion promotion
+- **Machine Learning**: Event-impact prediction — trained 5 models (Logistic Regression, Random Forest, XGBoost, LightGBM, MLP) on (significant event, affected asset) pairs with time-series aware train/val/test split, feature engineering, and automated champion promotion
 - **MLOps**: MLflow experiment tracking and model registry, champion/challenger promotion, model loader with in-memory caching, weekly retraining via Prefect
-- **Data Engineering**: ETL pipelines (5 data sources), feature engineering pipeline (27 flat features + 30-day windowed sequences), database design, REST API design
+- **Data Engineering**: ETL pipelines (5 data sources), event-centered feature engineering pipeline, database design, REST API design
 - **AI Engineering**: Local LLM inference (Ollama + Gemma 4 26B MoE on Apple Silicon Metal GPU), LangGraph multi-agent orchestration, RAG pipelines, LangSmith observability, prompt engineering
 - **UX**: Onboarding layer (inline tooltips + per-page help panels + plain-English glossary) so non-experts can navigate and interpret the data
 - **DevOps**: Docker, Docker Compose, nginx, Prefect orchestration, Makefile automation
@@ -29,9 +29,9 @@ Pages are ordered in the sidebar to follow a natural user flow: start with today
 - **World Map** — Choropleth showing event intensity by country with drill-down details (Goldstein score, conflict/cooperation breakdown, media mentions)
 - **Event Timeline** — Price charts overlaid with geopolitical event dots — red for conflict, green for cooperation. Drill-down table showing event details per day
 - **Correlation Explorer** — Shows how event metrics (conflict count, Goldstein scores, media mentions) correlate with market returns across 33 symbols. Per-metric cards show strength (strong/moderate/weak) and significance in plain English, rolling correlation timeseries with confidence intervals, multi-symbol heatmap
-- **Signals** — Market direction predictions with two levels:
+- **Signals** — When a significant geopolitical event occurs, how do affected assets respond? Two levels:
   - **Level 1 (Historical Frequency)**: "When violent conflict events occur, oil went UP 72% of the time" — pure conditional probability counting
-  - **Level 2 (ML Model)**: Predictions from the champion model loaded from MLflow. An **Active Model card** in the top-right shows the serving model, its test AUC, a "Champion" badge, and a link to MLflow for the full experiment comparison
+  - **Level 2 (Event-Impact ML Model)**: 5 classifiers trained on (significant event, affected asset) pairs — events filtered to |Goldstein| ≥ 5 AND ≥ 1000 mentions, target is 3-day forward return direction. Champion model served from MLflow with an **Active Model card** showing test AUC, model type, and deep-link to MLflow
 - **Prediction Markets** — Browse geopolitical prediction markets from Polymarket — probabilities, 24h volume, sortable table with expandable probability trend charts
 - **AI Analyst** — Chat interface powered by a LangGraph multi-agent pipeline with Gemma 4 26B MoE running locally via Ollama. Deterministic data collection and analysis, LLM-powered synthesis of intelligence assessments, fully traced in LangSmith
 - **Dashboard** — Platform overview: event counts, tracked symbols, strongest correlations, FRED economic indicator strip with animated counters, and recent high-impact events table
@@ -63,24 +63,30 @@ Start -> Supervisor -> Collection -> Supervisor -> Analysis -> Supervisor -> Dis
 
 ### ML Training Pipeline
 
-The project trains and compares 6 machine learning models for predicting significant market impact from geopolitical events. The winning sklearn-compatible model is automatically registered in MLflow's Model Registry as the **champion** and served by the Signals page.
+The project trains and compares 5 machine learning models for event-impact prediction: given a significant geopolitical event, will the affected asset move UP over the next 3 trading days? The winning sklearn-compatible model is automatically registered in MLflow's Model Registry as the **champion** and served by the Signals page.
 
-| Model | Type | Features |
-|-------|------|----------|
-| Logistic Regression | Linear baseline | 27 flat features |
-| Random Forest | Tree ensemble | 27 flat features |
-| XGBoost | Gradient boosting | 27 flat features |
-| LightGBM | Gradient boosting | 27 flat features |
-| MLP (PyTorch) | Neural network | 27 flat features |
-| LSTM (PyTorch) | Sequence model | 30-day x 16 feature windows |
+**Problem framing:**
+- Filter to significant events: |Goldstein| ≥ 5 AND ≥ 1,000 media mentions
+- Map each event to affected assets via `COUNTRY_ASSET_MAP` (e.g., Russia events → USDRUB=X, CL=F)
+- Target: binary UP/DOWN based on cumulative return over the next 3 trading days
+- Each training row represents one (event, asset) pair — not a calendar day
 
-**Feature pipeline** (`analysis/ml_features.py`):
-- **Flat features (27)**: Event metrics (Goldstein scale, mentions, tone, conflict/cooperation counts), sentiment aggregates (FinBERT), market context (rolling volatility, momentum, volume), temporal (day of week, month), event velocity (rate of change)
-- **Windowed sequences (30 x 16)**: Same features over a sliding 30-day window, built per-symbol so every window is contiguous in time. Used by the LSTM.
+| Model | Type |
+|-------|------|
+| Logistic Regression | Linear baseline |
+| Random Forest | Tree ensemble |
+| XGBoost | Gradient boosting |
+| LightGBM | Gradient boosting |
+| MLP (PyTorch) | Neural network |
+
+**Feature pipeline** (`analysis/event_features.py`):
+- **Event features**: Goldstein score (magnitude + direction), media mentions, average tone, conflict/cooperation counts, event category flags (CAMEO-derived)
+- **Asset context** (strictly lagged, no leakage): pre-event rolling volatility, momentum, volume
+- **Sentiment context**: Recent FinBERT sentiment in the event's country
 
 **Training** (`training/trainer.py`):
 - Time-series aware train/val/test split (70/15/15, no leakage — chronological)
-- Each model trained on the same dataset with the same StandardScaler
+- Each model trained on the same event-centered dataset with the same StandardScaler
 - All runs logged to MLflow: params, metrics (accuracy, precision, recall, F1, AUC-ROC on train/val/test splits), feature importance, classification reports, scaler + feature names as artifacts
 - Apple Silicon MPS acceleration for PyTorch models
 - **Champion promotion**: After training, the best sklearn-compatible model (highest test AUC) is registered in the MLflow Model Registry under the alias `champion`. Subsequent training runs only promote the new model if it beats the current champion's AUC (champion/challenger logic).
@@ -100,18 +106,17 @@ The project trains and compares 6 machine learning models for predicting signifi
 
 **Orchestration:** Weekly retraining via Prefect (`flows/training_flow.py`). View all runs at `http://localhost:5000` (MLflow UI).
 
-**Latest training results (1 year of data, 33 symbols, ~6800 train / 1450 val / 1450 test):**
+**Latest training results (event-impact prediction, ~9.3K event-asset pairs):**
 
-| Model | test AUC | test F1 | test Accuracy | Notes |
-|-------|----------|---------|---------------|-------|
-| **random_forest** | **0.908** | **0.790** | **0.823** | Champion |
-| xgboost | 0.903 | 0.790 | 0.823 | |
-| lightgbm | 0.903 | 0.781 | 0.816 | |
-| logistic_regression | 0.877 | 0.720 | 0.783 | Baseline |
-| mlp | 0.830 | 0.707 | 0.791 | |
-| lstm | 0.580 | 0.000 | 0.419 | Collapsed to majority class on 1yr data |
+| Model | test AUC | Notes |
+|-------|----------|-------|
+| **mlp** | **0.540** | Best AUC |
+| lightgbm | 0.504 | |
+| xgboost | 0.502 | Champion (better calibrated) |
+| random_forest | 0.492 | |
+| logistic_regression | 0.458 | Baseline |
 
-*Note: Those AUC numbers are unusually high for daily market direction prediction. A principled next step is auditing the feature pipeline for target leakage (features that inadvertently reveal information about the same day's return).*
+*These are honest numbers on a legitimately hard problem. Professional quants achieve 0.52–0.58 AUC on daily market direction prediction; anything higher usually indicates target leakage. The previous version of this pipeline reported 0.91 AUC due to rolling features that inadvertently included the target day's return — that has been fixed.*
 
 ### RAG System
 
@@ -201,9 +206,9 @@ Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 ┌─────────────────────────────────────────────────────────────────────┐
 │              ML Training Pipeline & Model Registry                 │
 │                                                                     │
-│   Feature Pipeline (27 flat + 30-day windows)                      │
+│   Event Feature Pipeline (event-asset pairs, lagged features)      │
 │        ↓                                                            │
-│   Train 6 models: LogReg, RF, XGBoost, LightGBM, MLP, LSTM         │
+│   Train 5 models: LogReg, RF, XGBoost, LightGBM, MLP               │
 │        ↓                                                            │
 │   Log runs to MLflow (params, metrics, artifacts, scaler)          │
 │        ↓                                                            │
@@ -219,8 +224,8 @@ Data Sources: GDELT + Yahoo Finance + RSS Feeds + FRED + Polymarket
 │                    Prefect Orchestration                           │
 │  Daily Pipeline: Events → Market → RSS → FRED → Polymarket →      │
 │                  Sentiment → Embeddings → Analysis                 │
-│  Weekly Pipeline: Feature Engineering → Model Training → MLflow    │
-│                   → Champion Promotion                             │
+│  Weekly Pipeline: Event Feature Engineering → 5-Model Training →   │
+│                   MLflow → Champion Promotion                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -368,11 +373,12 @@ geopolitical--market-tracker/
 │   │   │   ├── sentiment.py            # FinBERT sentiment scoring
 │   │   │   ├── embeddings.py           # Sentence transformer embeddings
 │   │   │   ├── feature_engineering.py  # Shared data preparation
-│   │   │   ├── ml_features.py          # ML feature pipeline (flat + windowed)
+│   │   │   ├── event_features.py        # Event-centered ML feature pipeline
+│   │   │   ├── ml_features.py          # Legacy ML feature pipeline (flat + windowed)
 │   │   │   ├── synthesis.py            # Ollama client for LLM assessments
 │   │   │   └── logging_config.py       # Logging utilities
 │   │   ├── training/                   # ML model training
-│   │   │   └── trainer.py              # 6-model comparison, MLflow logging,
+│   │   │   └── trainer.py              # 5-model comparison, MLflow logging,
 │   │   │                               #   champion/challenger promotion
 │   │   ├── ml/                         # ML runtime (inference layer)
 │   │   │   └── model_loader.py         # Loads champion from MLflow registry,
@@ -474,7 +480,7 @@ geopolitical--market-tracker/
 | E | RAG system — embeddings pipeline, vector search, context builder, AI Summary panel | Done |
 | F | Multi-agent — LangGraph supervisor graph, specialist agents, chat UI | Done |
 | G | Local LLM swap — replaced Anthropic API with Ollama + Gemma 4 26B MoE, deterministic collection/analysis nodes | Done |
-| H | ML training pipeline — feature engineering (flat + windowed), 6 models (LogReg, RF, XGBoost, LightGBM, MLP, LSTM), MLflow tracking | Done |
+| H | ML training pipeline — event-impact prediction, 5 models (LogReg, RF, XGBoost, LightGBM, MLP), MLflow tracking, target leakage audit | Done |
 | I | LangSmith observability — full tracing on LangGraph pipeline | Done |
 | J | Native Ollama (Metal GPU acceleration) — moved LLM out of Docker for 20-100x faster inference on Apple Silicon | Done |
 | K | Onboarding layer — InfoTooltip + PageHelp components, glossary of 22 terms, plain-English labels, navigation reorder | Done |
