@@ -280,10 +280,29 @@ f.ingest_all_series(start_date=date.today() - timedelta(days=365), end_date=date
 # PREFECT PIPELINE
 # ============================================================================
 
-pipeline: ## Run the daily pipeline manually (ingestion + analysis)
+pipeline: ## Run the daily pipeline manually (ingestion + analysis + transforms)
 	@echo "$(BLUE)Running daily pipeline...$(NC)"
 	docker exec gmt-api python -m flows.daily_pipeline
 	@echo "$(GREEN)Pipeline complete.$(NC)"
+
+transforms: ## Run medallion transforms only (PySpark Silver + dbt Gold)
+	@echo "$(BLUE)Running medallion transforms...$(NC)"
+	$(ACTIVATE) python -m flows.transform_flow
+	@echo "$(GREEN)Transforms complete.$(NC)"
+
+dbt-run: ## Run dbt Gold models
+	@echo "$(BLUE)Running dbt Gold models...$(NC)"
+	cd $(BACKEND)/dbt_project && dbt run --select gold --profiles-dir .
+	@echo "$(GREEN)dbt run complete.$(NC)"
+
+dbt-test: ## Run dbt data quality tests
+	@echo "$(BLUE)Running dbt tests...$(NC)"
+	cd $(BACKEND)/dbt_project && dbt test --select gold --profiles-dir .
+	@echo "$(GREEN)dbt tests complete.$(NC)"
+
+dbt-docs: ## Generate and serve dbt documentation (lineage DAG)
+	@echo "$(BLUE)Generating dbt docs...$(NC)"
+	cd $(BACKEND)/dbt_project && dbt docs generate --profiles-dir . && dbt docs serve --profiles-dir .
 
 train: ## Train all ML models and log to MLflow
 	@echo "$(BLUE)Running model training pipeline...$(NC)"

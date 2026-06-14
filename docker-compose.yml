@@ -12,7 +12,7 @@
 #   - frontend:       React app via nginx (port 3000)
 #   - prefect-server: Prefect UI + API (port 4200)
 #   - prefect-worker: Runs scheduled daily pipeline
-#   - mlflow:         ML experiment tracking UI (port 5000)
+#   - mlflow:         ML experiment tracking UI (host port 5001 -> container 5000)
 #
 # OLLAMA (LLM):
 #   Runs natively on the host (NOT in Docker) so it can use Metal GPU
@@ -23,7 +23,7 @@
 #   - Frontend:    http://localhost:3000
 #   - API Docs:    http://localhost:8000/docs
 #   - Prefect UI:  http://localhost:4200
-#   - MLflow UI:   http://localhost:5000
+#   - MLflow UI:   http://localhost:5001
 #   - Ollama:      http://localhost:11434 (native, not Docker)
 
 services:
@@ -145,7 +145,9 @@ services:
       --artifacts-destination /mlflow/artifacts
       --serve-artifacts
     ports:
-      - "5000:5000"
+      # Host 5001 -> container 5000. macOS AirPlay Receiver squats on 5000;
+      # internal service URIs still use mlflow:5000, only the host port changes.
+      - "5001:5000"
     volumes:
       - mlflow_data:/mlflow
     restart: unless-stopped

@@ -1,0 +1,70 @@
+version: 2
+
+sources:
+  - name: silver
+    description: "Silver layer tables populated by PySpark transforms"
+    schema: public
+    tables:
+      - name: silver_events
+        description: "Cleaned, classified GDELT events with event_group and normalized country codes"
+        columns:
+          - name: event_id
+            description: "GDELT global_event_id (unique)"
+          - name: event_date
+            description: "Date the event occurred"
+          - name: country_code
+            description: "ISO 3166-1 alpha-3 country code where event occurred"
+          - name: event_group
+            description: "High-level classification: verbal_cooperation, material_cooperation, verbal_conflict, material_conflict, violent_conflict"
+
+      - name: silver_market
+        description: "Market OHLCV data with rolling returns and volatility metrics"
+        columns:
+          - name: symbol
+            description: "Ticker symbol (e.g., CL=F, SPY)"
+          - name: date
+            description: "Trading date"
+          - name: close
+            description: "Closing price"
+
+      - name: silver_headlines
+        description: "News headlines with FinBERT sentiment scores"
+        columns:
+          - name: headline_id
+            description: "Primary key from Bronze table"
+          - name: source
+            description: "Normalized source name (reuters, ap, bbc, aljazeera)"
+          - name: published_date
+            description: "Date headline was published"
+
+      - name: silver_event_market
+        description: "Cross-domain join: events linked to market reactions via COUNTRY_ASSET_MAP"
+        columns:
+          - name: event_date
+            description: "Date of the geopolitical event"
+          - name: country_code
+            description: "Country where event occurred"
+          - name: symbol
+            description: "Market symbol affected by events in this country"
+
+  - name: bronze
+    description: "Raw ingestion tables (Bronze layer)"
+    schema: public
+    tables:
+      - name: economic_indicators
+        description: "FRED economic indicator observations"
+        columns:
+          - name: series_id
+            description: "FRED series identifier (GDP, CPIAUCSL, UNRATE, DFF, DGS10, UMCSENT)"
+          - name: date
+            description: "Observation date"
+          - name: value
+            description: "Indicator value"
+
+      - name: analysis_results
+        description: "Event study and anomaly detection results"
+        columns:
+          - name: symbol
+            description: "Market symbol analyzed"
+          - name: is_anomaly
+            description: "Whether this result was flagged as anomalous"

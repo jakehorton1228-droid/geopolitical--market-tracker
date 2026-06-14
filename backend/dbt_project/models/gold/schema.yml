@@ -1,0 +1,120 @@
+version: 2
+
+models:
+  - name: gold_geopolitical_daily
+    description: >
+      Daily geopolitical event aggregates by country. One row per (date, country).
+      Counts events by type (conflict, cooperation, violent), computes Goldstein
+      statistics and media mention totals.
+    columns:
+      - name: event_date
+        description: "Date of events"
+        tests:
+          - not_null
+      - name: country_code
+        description: "ISO 3166-1 alpha-3 country code"
+        tests:
+          - not_null
+      - name: total_events
+        description: "Total GDELT events for this country on this date"
+        tests:
+          - not_null
+      - name: conflict_events
+        description: "Count of material_conflict + violent_conflict events"
+      - name: cooperation_events
+        description: "Count of verbal_cooperation + material_cooperation events"
+      - name: avg_goldstein
+        description: "Average Goldstein scale (-10 conflict to +10 cooperation)"
+      - name: total_mentions
+        description: "Sum of media mentions across all events"
+
+  - name: gold_market_daily
+    description: >
+      Daily market data enriched with anomaly flags. One row per (date, symbol).
+      Includes rolling returns, volatility, volume z-scores, and whether the
+      day was flagged as anomalous by the analysis pipeline.
+    columns:
+      - name: date
+        description: "Trading date"
+        tests:
+          - not_null
+      - name: symbol
+        description: "Ticker symbol"
+        tests:
+          - not_null
+      - name: close
+        description: "Closing price"
+        tests:
+          - not_null
+      - name: is_anomaly
+        description: "Whether this day was flagged as anomalous"
+
+  - name: gold_sentiment_daily
+    description: >
+      Daily news sentiment aggregates by source. One row per (date, source),
+      plus an 'all' row aggregating across sources. Includes headline counts,
+      average sentiment, and the most extreme headlines.
+    columns:
+      - name: published_date
+        description: "Date headlines were published"
+        tests:
+          - not_null
+      - name: source
+        description: "News source (reuters, ap, bbc, aljazeera, all)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['reuters', 'ap', 'bbc', 'aljazeera', 'all']
+      - name: headline_count
+        description: "Number of headlines from this source on this date"
+        tests:
+          - not_null
+      - name: avg_sentiment
+        description: "Average FinBERT sentiment score (-1.0 to +1.0)"
+
+  - name: gold_economic_snapshot
+    description: >
+      FRED economic indicators enriched with previous-value deltas.
+      One row per (date, series_id). Computes change and change_pct
+      for tracking economic trends.
+    columns:
+      - name: date
+        description: "Observation date"
+        tests:
+          - not_null
+      - name: series_id
+        description: "FRED series identifier"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['GDP', 'CPIAUCSL', 'UNRATE', 'DFF', 'DGS10', 'UMCSENT']
+      - name: value
+        description: "Indicator value"
+        tests:
+          - not_null
+
+  - name: gold_daily_summary
+    description: >
+      Cross-domain daily summary combining geopolitical, market, and sentiment
+      signals. Computes a composite risk_level (low/elevated/high) for the day.
+      The supervisor agent's primary overview table.
+    columns:
+      - name: summary_date
+        description: "Calendar date"
+        tests:
+          - not_null
+          - unique
+      - name: risk_level
+        description: "Composite risk assessment"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'elevated', 'high']
+      - name: total_global_events
+        description: "Total GDELT events worldwide"
+      - name: total_conflict_events
+        description: "Total material + violent conflict events"
+      - name: vix_close
+        description: "VIX closing value (fear gauge)"
+      - name: avg_news_sentiment
+        description: "Average news sentiment across all sources"

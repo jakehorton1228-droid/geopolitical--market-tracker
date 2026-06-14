@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: "Staging view over silver_events — passthrough for lineage"
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+      - name: event_date
+        tests:
+          - not_null
+      - name: event_group
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['verbal_cooperation', 'material_cooperation', 'verbal_conflict', 'material_conflict', 'violent_conflict', 'other']
+
+  - name: stg_market
+    description: "Staging view over silver_market — passthrough for lineage"
+    columns:
+      - name: symbol
+        tests:
+          - not_null
+      - name: date
+        tests:
+          - not_null
+      - name: close
+        tests:
+          - not_null
+
+  - name: stg_headlines
+    description: "Staging view over silver_headlines — passthrough for lineage"
+    columns:
+      - name: headline_id
+        tests:
+          - not_null
+      - name: published_date
+        tests:
+          - not_null
+
+  - name: stg_event_market
+    description: "Staging view over silver_event_market — passthrough for lineage"
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+      - name: symbol
+        tests:
+          - not_null

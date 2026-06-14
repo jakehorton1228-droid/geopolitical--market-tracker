@@ -1,0 +1,20 @@
+select
+    event_date,
+    country_code,
+    symbol,
+    event_count,
+    avg_goldstein,
+    min_goldstein,
+    max_goldstein,
+    total_mentions,
+    avg_tone,
+    violent_count,
+    conflict_count,
+    cooperation_count,
+    dominant_event_group,
+    close,
+    daily_return,
+    log_return,
+    return_5d,
+    volatility_20d
+from {{ source('silver', 'silver_event_market') }}
