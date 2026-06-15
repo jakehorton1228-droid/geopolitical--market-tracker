@@ -165,30 +165,56 @@ def post_ingest_nlp() -> dict:
     }
 
 
-@flow(name="daily-ingestion", retries=2, retry_delay_seconds=300, log_prints=True)
+@flow(name="daily-ingestion", log_prints=True)
 def daily_ingestion() -> dict:
-    """Run daily data ingestion: events + market data + RSS + FRED + Polymarket, then NLP."""
+    """Run daily data ingestion: events + market data + RSS + FRED + Polymarket, then NLP.
+
+    Uses a "continue on failure" pattern — each source is independent, so one
+    source failing (e.g., missing API key, API downtime) should NOT block the
+    others. This is a core data engineering principle: pipelines should be
+    resilient. If FRED is down, GDELT data should still flow through to Silver
+    and Gold.
+
+    Each task is wrapped in try/except. Failures are logged and tracked in the
+    results dict, but the flow continues. The return value tells you exactly
+    what succeeded and what didn't.
+    """
     logger = get_run_logger()
     logger.info("Starting daily ingestion pipeline")
 
-    events_result = ingest_events()
-    market_result = ingest_market()
-    rss_result = ingest_rss()
-    fred_result = ingest_fred()
-    polymarket_result = ingest_polymarket()
+    results = {}
+    failures = []
 
-    # Immediately process new content for RAG availability
-    nlp_result = post_ingest_nlp()
+    # Each source runs independently — one failure doesn't block others
+    for name, task_fn in [
+        ("events", ingest_events),
+        ("market", ingest_market),
+        ("rss", ingest_rss),
+        ("fred", ingest_fred),
+        ("polymarket", ingest_polymarket),
+    ]:
+        try:
+            results[name] = task_fn()
+        except Exception as e:
+            logger.warning(f"{name} ingestion failed: {e}")
+            results[name] = {"status": "failed", "error": str(e)}
+            failures.append(name)
+
+    # NLP post-processing runs on whatever was successfully ingested
+    try:
+        results["nlp"] = post_ingest_nlp()
+    except Exception as e:
+        logger.warning(f"NLP post-processing failed: {e}")
+        results["nlp"] = {"status": "failed", "error": str(e)}
+        failures.append("nlp")
+
+    if failures:
+        logger.warning(f"Ingestion completed with failures: {failures}")
+    else:
+        logger.info("All ingestion tasks succeeded")
 
     logger.info("Daily ingestion complete")
-    return {
-        "events": events_result,
-        "market": market_result,
-        "rss": rss_result,
-        "fred": fred_result,
-        "polymarket": polymarket_result,
-        "nlp": nlp_result,
-    }
+    return results
 
 
 if __name__ == "__main__":
