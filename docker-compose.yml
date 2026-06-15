@@ -13,6 +13,7 @@
 #   - prefect-server: Prefect UI + API (port 4200)
 #   - prefect-worker: Runs scheduled daily pipeline
 #   - mlflow:         ML experiment tracking UI (host port 5001 -> container 5000)
+#   - pgadmin:        Database visualization UI (port 5050)
 #
 # OLLAMA (LLM):
 #   Runs natively on the host (NOT in Docker) so it can use Metal GPU
@@ -24,6 +25,7 @@
 #   - API Docs:    http://localhost:8000/docs
 #   - Prefect UI:  http://localhost:4200
 #   - MLflow UI:   http://localhost:5001
+#   - pgAdmin:     http://localhost:5050
 #   - Ollama:      http://localhost:11434 (native, not Docker)
 
 services:
@@ -164,6 +166,24 @@ services:
     restart: unless-stopped
 
   # ===========================================================================
+  # PGADMIN (database visualization)
+  # ===========================================================================
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: gmt-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+
+  # ===========================================================================
   # DATABASE MIGRATIONS (run once then exit)
   # ===========================================================================
   migrate:
@@ -185,3 +205,5 @@ volumes:
     name: gmt-pgdata
   mlflow_data:
     name: gmt-mlflow-data
+  pgadmin_data:
+    name: gmt-pgadmin-data
