@@ -4,7 +4,7 @@ Master Prefect flow: daily pipeline.
 Runs three stages in sequence:
 1. Ingestion — fetch fresh data from 5 sources into Bronze tables
 2. Analysis — compute sentiment, embeddings, correlations on fresh data
-3. Transforms — PySpark Silver transforms + dbt Gold models (medallion architecture)
+3. Transforms — DuckDB Silver transforms + dbt Gold models (medallion architecture)
 
 Scheduled via deploy.py to run daily at 6:00 AM UTC.
 """

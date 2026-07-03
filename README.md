@@ -1,14 +1,14 @@
 # Geopolitical Market Intelligence Platform
 
-A data engineering–driven intelligence platform that fuses geopolitical events, financial markets, economic indicators, news sentiment, and prediction market odds through a **medallion architecture** (Bronze → Silver → Gold). PySpark transforms clean and enrich raw data, dbt models build business-ready Gold marts, and domain-specific AI agents query the marts to deliver real-time intelligence briefings.
+A data engineering–driven intelligence platform that fuses geopolitical events, financial markets, economic indicators, news sentiment, and prediction market odds through a **medallion architecture** (Bronze → Silver → Gold). DuckDB transforms clean and enrich raw data, dbt models build business-ready Gold marts, and domain-specific AI agents query the marts to deliver real-time intelligence briefings.
 
 ## About This Project
 
 This is a portfolio project showcasing modern data engineering and AI agent systems. The pipeline is the product — it ingests from 5 live data sources, transforms through a three-layer medallion architecture, and serves analysis through both a REST API and an agentic LLM interface.
 
 **Skills demonstrated:**
-- **Data Engineering**: Medallion architecture (Bronze → Silver → Gold), PySpark transforms (local mode, Databricks-portable), dbt models with incremental materialization, data quality testing, lineage tracking
-- **Orchestration**: Prefect flows coordinating ingestion → analysis → PySpark Silver → dbt Gold
+- **Data Engineering**: Medallion architecture (Bronze → Silver → Gold), DuckDB transforms (SQL-based, right-sized — reads/writes Postgres via the postgres extension, no JVM), dbt models with incremental materialization, data quality testing, lineage tracking
+- **Orchestration**: Prefect flows coordinating ingestion → analysis → DuckDB Silver → dbt Gold
 - **SQL**: Window functions (LAG, rolling aggregates), CTEs, incremental models, custom dbt tests
 - **AI Engineering**: LangGraph multi-agent orchestration, local LLM inference (Ollama + Gemma 4 26B MoE), RAG with pgvector, LangSmith observability
 - **Machine Learning**: Event-impact prediction (5 models), MLflow experiment tracking, champion/challenger promotion, time-series aware train/val/test splits
@@ -32,13 +32,13 @@ This is a portfolio project showcasing modern data engineering and AI agent syst
 │  events │ market_data │ news_headlines │ economic_indicators │     │
 │  prediction_markets                                                │
 └────────────────────────────────┬────────────────────────────────────┘
-                                 │ PySpark local mode transforms
+                                 │ DuckDB transforms
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                 SILVER (Cleaned, Typed, Joined)                    │
 │  silver_events          — Deduped, CAMEO classified, FIPS→ISO     │
 │  silver_market          — Rolling returns (5d/20d), volatility,   │
-│                           volume z-scores via Spark Window funcs   │
+│                           volume z-scores via SQL window functions │
 │  silver_headlines       — Normalized sources, sentiment filtered   │
 │  silver_event_market    — Cross-domain join via COUNTRY_ASSET_MAP  │
 └────────────────────────────────┬────────────────────────────────────┘
@@ -74,7 +74,7 @@ This is a portfolio project showcasing modern data engineering and AI agent syst
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Prefect Orchestration                           │
-│  Daily: Ingest → Analysis → PySpark Silver → dbt Gold              │
+│  Daily: Ingest → Analysis → DuckDB Silver → dbt Gold               │
 │  Weekly: Event Feature Engineering → 5-Model Training → MLflow     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -93,16 +93,16 @@ Five data sources land in raw tables via Prefect-orchestrated ingestion flows. D
 | `economic_indicators` | FRED | `(series_id, date)` |
 | `prediction_markets` | Polymarket | `(market_id, snapshot_date)` |
 
-### Silver Layer (PySpark Transforms)
+### Silver Layer (DuckDB Transforms)
 
-PySpark local mode transforms clean, type, enrich, and join Bronze data. Uses the same `pyspark.sql` API as Databricks — code ports to a Databricks cluster with zero changes.
+DuckDB transforms clean, type, enrich, and join Bronze data — reading and writing Postgres directly via the postgres extension (DuckDB is the compute engine; Postgres stays the storage layer). Right-sized for this ~1.5M-row dataset: no JVM, no cluster. The SQL ports to MotherDuck/Snowflake/BigQuery if the data ever outgrows a single node.
 
-| Transform | What it does | Key PySpark features |
-|-----------|-------------|---------------------|
-| `silver_events` | Dedup on `global_event_id`, classify via CAMEO → `event_group`, normalize FIPS → ISO country codes, add `is_significant` flag | UDFs, broadcast variables, `dropDuplicates` |
-| `silver_market` | Dedup on `(symbol, date)`, compute rolling returns (5d, 20d), rolling volatility, volume z-score | `Window.partitionBy().orderBy()`, `F.lag()`, `F.stddev()` |
-| `silver_headlines` | Dedup on URL, normalize source names, filter to sentiment-scored headlines | `F.create_map()`, `F.coalesce()` |
-| `silver_event_market` | Join events → market via `COUNTRY_ASSET_MAP`, aggregate to one row per (date, country, symbol) | Multi-table join, `F.mode()`, conditional aggregation |
+| Transform | What it does | Key SQL features |
+|-----------|-------------|------------------|
+| `silver_events` | Deterministic dedup on `global_event_id`, classify via CAMEO → `event_group`, normalize FIPS → ISO country codes, add `is_significant` flag | `row_number()` dedup, map lookups via `LEFT JOIN`, `COALESCE` |
+| `silver_market` | Dedup on `(symbol, date)`, compute rolling returns (5d, 20d), rolling volatility, volume z-score | window frames (`ROWS BETWEEN`), `LAG()`, `STDDEV_SAMP()` |
+| `silver_headlines` | Dedup on URL, normalize source names, filter to sentiment-scored headlines | `row_number()`, lookup `LEFT JOIN`, `COALESCE` |
+| `silver_event_market` | Join events → market via `COUNTRY_ASSET_MAP`, aggregate to one row per (date, country, symbol) | multi-table join, deterministic dominant-group, conditional aggregation |
 
 ### Gold Layer (dbt Models)
 
@@ -193,7 +193,7 @@ make start
 
 # Ingest data + run transforms
 make ingest-all       # Fetch from all 5 sources
-make transforms       # PySpark Silver + dbt Gold
+make transforms       # DuckDB Silver + dbt Gold
 
 # Optional
 make train            # Train ML models (requires historical data)
@@ -221,24 +221,15 @@ make dev-api          # Terminal 1
 make dev-frontend     # Terminal 2
 ```
 
-### JDBC Driver (PySpark)
-
-PySpark reads/writes PostgreSQL via JDBC. Download the driver once:
-
-```bash
-mkdir -p backend/jars
-curl -L -o backend/jars/postgresql-42.7.3.jar \
-  https://jdbc.postgresql.org/download/postgresql-42.7.3.jar
-```
-
 ## Project Structure
 
 ```
 geopolitical--market-tracker/
 ├── backend/
 │   ├── src/
-│   │   ├── spark_transforms/              # PySpark Silver layer
-│   │   │   ├── spark_session.py           # SparkSession factory + JDBC helpers
+│   │   ├── transforms/                    # DuckDB Silver layer
+│   │   │   ├── db.py                       # DuckDB connection + Postgres IO
+│   │   │   ├── mappings.py                 # CAMEO/FIPS/asset lookup tables
 │   │   │   ├── silver_events.py           # Bronze events → Silver (dedup, classify, normalize)
 │   │   │   ├── silver_market.py           # Bronze market → Silver (rolling returns, volatility)
 │   │   │   ├── silver_headlines.py        # Bronze headlines → Silver (normalize, filter)
@@ -261,11 +252,11 @@ geopolitical--market-tracker/
 │   ├── flows/                             # Prefect orchestration
 │   │   ├── ingestion_flow.py              # Daily ingestion (5 sources)
 │   │   ├── analysis_flow.py               # Daily analysis
-│   │   ├── transform_flow.py             # PySpark Silver → dbt Gold
+│   │   ├── transform_flow.py             # DuckDB Silver → dbt Gold
 │   │   ├── daily_pipeline.py              # Master: ingest → analyze → transform
 │   │   └── training_flow.py               # Weekly ML training
+│   ├── notebooks/                         # DuckDB data-exploration notebook
 │   ├── alembic/                           # Database migrations
-│   ├── jars/                              # PostgreSQL JDBC driver
 │   └── requirements.txt
 ├── frontend/                              # React 19 + Vite + Tailwind
 │   └── src/
@@ -306,7 +297,7 @@ geopolitical--market-tracker/
 ```bash
 make start              # Start all Docker services
 make ingest-all         # Ingest from all 5 sources + NLP processing
-make transforms         # Run PySpark Silver + dbt Gold
+make transforms         # Run DuckDB Silver + dbt Gold
 make pipeline           # Full daily pipeline (ingest → analyze → transform)
 make train              # Train ML models, log to MLflow
 make dbt-run            # Run dbt Gold models only

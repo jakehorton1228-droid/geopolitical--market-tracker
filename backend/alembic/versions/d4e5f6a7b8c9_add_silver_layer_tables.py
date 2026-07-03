@@ -5,7 +5,7 @@ Revises: fb13caaa6309
 Create Date: 2026-06-14
 
 Creates the Silver layer tables that sit between Bronze (raw ingestion)
-and Gold (dbt models). PySpark transforms populate these tables.
+and Gold (dbt models). DuckDB transforms populate these tables.
 
 Tables:
 - silver_events: Cleaned, classified GDELT events

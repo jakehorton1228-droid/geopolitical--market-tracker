@@ -285,7 +285,7 @@ pipeline: ## Run the daily pipeline manually (ingestion + analysis + transforms)
 	docker exec gmt-api python -m flows.daily_pipeline
 	@echo "$(GREEN)Pipeline complete.$(NC)"
 
-transforms: ## Run medallion transforms only (PySpark Silver + dbt Gold)
+transforms: ## Run medallion transforms only (DuckDB Silver + dbt Gold)
 	@echo "$(BLUE)Running medallion transforms...$(NC)"
 	$(ACTIVATE) python -m flows.transform_flow
 	@echo "$(GREEN)Transforms complete.$(NC)"

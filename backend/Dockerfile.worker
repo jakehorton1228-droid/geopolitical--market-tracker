@@ -22,6 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-install the DuckDB postgres extension so the Silver transforms don't have
+# to download it at runtime (keeps the worker resilient to network hiccups).
+RUN python -c "import duckdb; duckdb.connect().execute('INSTALL postgres')"
+
 # Copy application code and flows
 COPY src/ ./src/
 COPY flows/ ./flows/

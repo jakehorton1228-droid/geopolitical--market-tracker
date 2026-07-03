@@ -1,7 +1,7 @@
 """
 Prefect flow for the medallion transform pipeline.
 
-Runs PySpark Silver transforms first (Bronze → Silver), then dbt Gold models
+Runs DuckDB Silver transforms first (Bronze → Silver), then dbt Gold models
 (Silver → Gold). This is the third stage in the daily pipeline:
 
     ingestion → analysis → transforms (this flow)
@@ -15,14 +15,15 @@ Silver transforms run in dependency order:
 Gold transforms run via dbt:
 5. dbt run --select gold (builds all Gold models in dependency order)
 6. dbt test --select gold (runs data quality tests)
+
+Compute engine: DuckDB over the Postgres storage layer — pure SQL, no JVM.
+Right-sized for this ~1.5M-row dataset; the SQL ports to a warehouse if needed.
 """
 
 import subprocess
 from pathlib import Path
 
 from prefect import flow, task, get_run_logger
-
-from src.spark_transforms.spark_session import stop_spark
 
 
 # Path to the dbt project
@@ -32,21 +33,21 @@ DBT_PROJECT_DIR = Path(__file__).parent.parent / "dbt_project"
 @task(name="silver-events", retries=1, log_prints=True)
 def run_silver_events() -> int:
     """Transform Bronze events → Silver events."""
-    from src.spark_transforms.silver_events import run
+    from src.transforms.silver_events import run
     return run()
 
 
 @task(name="silver-market", retries=1, log_prints=True)
 def run_silver_market() -> int:
     """Transform Bronze market_data → Silver market."""
-    from src.spark_transforms.silver_market import run
+    from src.transforms.silver_market import run
     return run()
 
 
 @task(name="silver-headlines", retries=1, log_prints=True)
 def run_silver_headlines() -> int:
     """Transform Bronze news_headlines → Silver headlines."""
-    from src.spark_transforms.silver_headlines import run
+    from src.transforms.silver_headlines import run
     return run()
 
 
@@ -56,14 +57,8 @@ def run_silver_event_market() -> int:
 
     Must run after silver_events and silver_market.
     """
-    from src.spark_transforms.silver_event_market import run
+    from src.transforms.silver_event_market import run
     return run()
-
-
-@task(name="stop-spark", log_prints=True)
-def shutdown_spark():
-    """Stop the SparkSession after all Silver transforms complete."""
-    stop_spark()
 
 
 @task(name="dbt-run-gold", retries=1, log_prints=True)
@@ -102,8 +97,8 @@ def run_dbt_tests() -> str:
 
     if result.returncode != 0:
         logger.warning(f"dbt test failures:\n{result.stdout}")
-        # Don't raise — log warnings but don't fail the pipeline
-        # Tests alert us to data quality issues, they don't block delivery
+        # Don't raise — log warnings but don't fail the pipeline.
+        # Tests alert us to data quality issues, they don't block delivery.
 
     logger.info(f"dbt test output:\n{result.stdout}")
     return result.stdout
@@ -111,19 +106,18 @@ def run_dbt_tests() -> str:
 
 @flow(name="daily-transforms", log_prints=True)
 def daily_transforms() -> dict:
-    """Full transform pipeline: PySpark Silver → dbt Gold.
+    """Full transform pipeline: DuckDB Silver → dbt Gold.
 
     Dependency order:
-    - silver_events, silver_market, silver_headlines run in parallel
+    - silver_events, silver_market, silver_headlines (independent)
     - silver_event_market runs after events + market complete
-    - Spark shuts down after all Silver transforms
     - dbt Gold runs after Silver is complete
     - dbt tests run after Gold models are built
     """
     logger = get_run_logger()
     logger.info("=== Starting Medallion Transforms ===")
 
-    # Stage 1: Independent Silver transforms (can run in parallel)
+    # Stage 1: Independent Silver transforms
     events_count = run_silver_events()
     market_count = run_silver_market()
     headlines_count = run_silver_headlines()
@@ -133,13 +127,10 @@ def daily_transforms() -> dict:
         wait_for=[events_count, market_count]
     )
 
-    # Stage 3: Shutdown Spark
-    shutdown_spark(wait_for=[event_market_count, headlines_count])
+    # Stage 3: dbt Gold models (after all Silver tables are populated)
+    dbt_output = run_dbt_gold(wait_for=[event_market_count, headlines_count])
 
-    # Stage 4: dbt Gold models
-    dbt_output = run_dbt_gold()
-
-    # Stage 5: dbt data quality tests
+    # Stage 4: dbt data quality tests
     test_output = run_dbt_tests(wait_for=[dbt_output])
 
     silver_results = {

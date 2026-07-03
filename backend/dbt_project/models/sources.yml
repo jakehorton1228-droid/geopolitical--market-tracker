@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: silver
-    description: "Silver layer tables populated by PySpark transforms"
+    description: "Silver layer tables populated by DuckDB transforms"
     schema: public
     tables:
       - name: silver_events

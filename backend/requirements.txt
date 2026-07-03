@@ -42,7 +42,9 @@ torch>=2.0.0
 sentence-transformers>=3.0.0
 
 # Medallion Architecture
-pyspark>=3.5.0
+# DuckDB is the Silver-layer compute engine (Bronze→Silver); reads/writes
+# Postgres via the postgres extension. Right-sized for ~1.5M-row data — no JVM.
+duckdb>=1.1.0
 dbt-postgres>=1.8.0
 
 # Utilities
