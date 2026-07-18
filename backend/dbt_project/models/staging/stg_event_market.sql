@@ -17,4 +17,4 @@ select
     log_return,
     return_5d,
     volatility_20d
-from {{ source('silver', 'silver_event_market') }}
+from {{ ref('silver_event_market') }}

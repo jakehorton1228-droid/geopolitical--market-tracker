@@ -5,16 +5,37 @@ config-version: 2
 profile: 'gmip'
 
 model-paths: ["models"]
+seed-paths: ["seeds"]
 test-paths: ["tests"]
 macro-paths: ["macros"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 
+# DuckDB is the engine; `pg` (the attached Postgres database) is where models land.
+# Silver + Gold both materialize as tables in Postgres. Staging is ephemeral —
+# pure passthrough CTEs inlined into downstream models, so nothing extra is
+# written to Postgres just for lineage.
 models:
   gmip:
+    +database: pg
+    +schema: public
     staging:
-      +materialized: view
-      +schema: public
+      +materialized: ephemeral
+    silver:
+      +materialized: table
     gold:
       +materialized: table
-      +schema: public
+
+# Reference/lookup tables, generated from src/config/constants.py.
+# They live in the DuckDB scratch catalog (NOT Postgres) — DuckDB joins them
+# cross-catalog against Postgres Bronze at transform time, so they don't clutter
+# the serving database. `code` columns are forced to varchar so CAMEO codes like
+# '01'..'09' keep their leading zero instead of being sniffed as integers.
+seeds:
+  gmip:
+    event_group_map:
+      +column_types:
+        code: varchar
+    cameo_label_map:
+      +column_types:
+        code: varchar

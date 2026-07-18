@@ -1,7 +1,7 @@
--- Staging view over silver_events.
--- Thin passthrough — Silver transform already handled cleaning.
--- Exists so Gold models use {{ ref('stg_events') }} instead of {{ source() }}
--- which gives dbt proper lineage tracking.
+-- Staging passthrough over the silver_events model.
+-- Exists so Gold models ref a stable staging name and dbt tracks lineage
+-- silver_events → stg_events → gold_*. Ephemeral: inlined as a CTE, not
+-- materialized. Now refs the dbt model (was: source('silver', 'silver_events')).
 
 select
     event_id,
@@ -22,4 +22,4 @@ select
     geo_lat,
     geo_long,
     is_significant
-from {{ source('silver', 'silver_events') }}
+from {{ ref('silver_events') }}

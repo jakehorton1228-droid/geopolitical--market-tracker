@@ -1,12 +1,30 @@
+# dbt profile for the GMIP medallion — dbt-duckdb.
+#
+# DuckDB is the COMPUTE engine; Postgres is the STORAGE layer. We ATTACH the
+# Postgres database as `pg` (via DuckDB's postgres extension) so dbt reads Bronze
+# and materializes Silver + Gold back into Postgres — all through DuckDB, in plain
+# SQL, no JVM. The .duckdb file at `path` is just scratch compute state; the real
+# data lives in Postgres. This is the same attach-and-write path the old
+# src/transforms/db.py used by hand, now driven declaratively by dbt.
+#
+# The attach string reuses DATABASE_URL so it stays in lockstep with the app and
+# Alembic. Inside docker-compose that resolves to the `db` service; for a local
+# run, export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/geopolitical_tracker
 gmip:
   target: dev
   outputs:
     dev:
-      type: postgres
-      host: "{{ env_var('GMIP_DB_HOST', 'localhost') }}"
-      port: "{{ env_var('GMIP_DB_PORT', '5432') | int }}"
-      user: "{{ env_var('GMIP_DB_USER', 'gmt') }}"
-      password: "{{ env_var('GMIP_DB_PASSWORD', 'gmt_password') }}"
-      dbname: "{{ env_var('GMIP_DB_NAME', 'geopolitical_market_tracker') }}"
-      schema: public
-      threads: 4
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '/tmp/gmip_dbt.duckdb') }}"
+      # Single-threaded on purpose: models materialize into ATTACHED Postgres, and
+      # concurrent writes through DuckDB's postgres extension can intermittently
+      # race. The whole medallion builds in ~5s at this data size, so serial is
+      # both reliable and fast enough. Bump this only if you move to a warehouse
+      # where models are independent DuckDB tables.
+      threads: 1
+      extensions:
+        - postgres
+      attach:
+        - path: "{{ env_var('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/geopolitical_tracker') }}"
+          type: postgres
+          alias: pg

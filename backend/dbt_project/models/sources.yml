@@ -1,56 +1,28 @@
 version: 2
 
 sources:
-  - name: silver
-    description: "Silver layer tables populated by DuckDB transforms"
+  # Bronze = raw ingestion tables, written by the Python extract-load layer.
+  # dbt (via DuckDB) reads these but never writes them — Alembic owns their schema.
+  - name: bronze
+    description: "Raw ingestion tables (Bronze layer), written by Python EL."
+    database: pg
     schema: public
     tables:
-      - name: silver_events
-        description: "Cleaned, classified GDELT events with event_group and normalized country codes"
+      - name: events
+        description: "Raw GDELT events (significant-event filtered at load)."
         columns:
-          - name: event_id
-            description: "GDELT global_event_id (unique)"
+          - name: global_event_id
+            description: "GDELT unique event id"
           - name: event_date
             description: "Date the event occurred"
-          - name: country_code
-            description: "ISO 3166-1 alpha-3 country code where event occurred"
-          - name: event_group
-            description: "High-level classification: verbal_cooperation, material_cooperation, verbal_conflict, material_conflict, violent_conflict"
-
-      - name: silver_market
-        description: "Market OHLCV data with rolling returns and volatility metrics"
-        columns:
-          - name: symbol
-            description: "Ticker symbol (e.g., CL=F, SPY)"
-          - name: date
-            description: "Trading date"
-          - name: close
-            description: "Closing price"
-
-      - name: silver_headlines
-        description: "News headlines with FinBERT sentiment scores"
-        columns:
-          - name: headline_id
-            description: "Primary key from Bronze table"
-          - name: source
-            description: "Normalized source name (reuters, ap, bbc, aljazeera)"
-          - name: published_date
-            description: "Date headline was published"
-
-      - name: silver_event_market
-        description: "Cross-domain join: events linked to market reactions via COUNTRY_ASSET_MAP"
-        columns:
-          - name: event_date
-            description: "Date of the geopolitical event"
-          - name: country_code
-            description: "Country where event occurred"
-          - name: symbol
-            description: "Market symbol affected by events in this country"
-
-  - name: bronze
-    description: "Raw ingestion tables (Bronze layer)"
-    schema: public
-    tables:
+          - name: event_root_code
+            description: "CAMEO root code (01-20)"
+          - name: action_geo_country_code
+            description: "FIPS 10-4 country code where the event occurred"
+      - name: market_data
+        description: "Raw Yahoo Finance OHLCV per symbol per day."
+      - name: news_headlines
+        description: "Raw RSS headlines; sentiment/embeddings added by the enrich stage."
       - name: economic_indicators
         description: "FRED economic indicator observations"
         columns:
@@ -60,7 +32,6 @@ sources:
             description: "Observation date"
           - name: value
             description: "Indicator value"
-
       - name: analysis_results
         description: "Event study and anomaly detection results"
         columns:
@@ -68,3 +39,6 @@ sources:
             description: "Market symbol analyzed"
           - name: is_anomaly
             description: "Whether this result was flagged as anomalous"
+
+  # NOTE: There is no `silver` source anymore. All four Silver tables are now dbt
+  # models (models/silver/), referenced downstream via ref() for full lineage.

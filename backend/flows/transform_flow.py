@@ -1,23 +1,17 @@
-"""
-Prefect flow for the medallion transform pipeline.
+"""Prefect flow for the medallion transform layer — dbt on DuckDB.
 
-Runs DuckDB Silver transforms first (Bronze → Silver), then dbt Gold models
-(Silver → Gold). This is the third stage in the daily pipeline:
+The ENTIRE medallion (Bronze→Silver→Gold) is now a single dbt-duckdb project
+(see backend/dbt_project/). This flow just drives dbt in three steps:
 
-    ingestion → analysis → transforms (this flow)
+    seed  → load reference tables (CAMEO/FIPS/country-asset maps)
+    run   → build every Silver + Gold model, in dependency order
+    test  → data-quality checks (non-blocking)
 
-Silver transforms run in dependency order:
-1. silver_events (from Bronze events)
-2. silver_market (from Bronze market_data)
-3. silver_headlines (from Bronze news_headlines)
-4. silver_event_market (from Silver events + Silver market — must run last)
+Compute engine: DuckDB, attached to Postgres (the storage layer). This replaces
+the old hand-written Python Silver transforms in src/transforms/ — dbt now owns
+the whole transform layer, with one lineage graph, one set of tests, one engine.
 
-Gold transforms run via dbt:
-5. dbt run --select gold (builds all Gold models in dependency order)
-6. dbt test --select gold (runs data quality tests)
-
-Compute engine: DuckDB over the Postgres storage layer — pure SQL, no JVM.
-Right-sized for this ~1.5M-row dataset; the SQL ports to a warehouse if needed.
+It's the third stage of the daily pipeline:  ingest → enrich → transforms (this).
 """
 
 import subprocess
@@ -25,129 +19,80 @@ from pathlib import Path
 
 from prefect import flow, task, get_run_logger
 
-
-# Path to the dbt project
+# Path to the dbt project. profiles.yml there reads DATABASE_URL to attach Postgres.
 DBT_PROJECT_DIR = Path(__file__).parent.parent / "dbt_project"
 
 
-@task(name="silver-events", retries=1, log_prints=True)
-def run_silver_events() -> int:
-    """Transform Bronze events → Silver events."""
-    from src.transforms.silver_events import run
-    return run()
-
-
-@task(name="silver-market", retries=1, log_prints=True)
-def run_silver_market() -> int:
-    """Transform Bronze market_data → Silver market."""
-    from src.transforms.silver_market import run
-    return run()
-
-
-@task(name="silver-headlines", retries=1, log_prints=True)
-def run_silver_headlines() -> int:
-    """Transform Bronze news_headlines → Silver headlines."""
-    from src.transforms.silver_headlines import run
-    return run()
-
-
-@task(name="silver-event-market", retries=1, log_prints=True)
-def run_silver_event_market() -> int:
-    """Transform Silver events + Silver market → Silver event_market.
-
-    Must run after silver_events and silver_market.
-    """
-    from src.transforms.silver_event_market import run
-    return run()
-
-
-@task(name="dbt-run-gold", retries=1, log_prints=True)
-def run_dbt_gold() -> str:
-    """Run dbt Gold models: Silver → Gold."""
-    logger = get_run_logger()
-    logger.info("Running dbt Gold models...")
-
-    result = subprocess.run(
-        ["dbt", "run", "--select", "gold", "--profiles-dir", str(DBT_PROJECT_DIR)],
+def _run_dbt(args: list[str]) -> subprocess.CompletedProcess:
+    """Run a dbt subcommand inside the project dir, capturing output."""
+    return subprocess.run(
+        ["dbt", *args, "--profiles-dir", str(DBT_PROJECT_DIR)],
         cwd=str(DBT_PROJECT_DIR),
         capture_output=True,
         text=True,
     )
 
-    if result.returncode != 0:
-        logger.error(f"dbt run failed:\n{result.stderr}")
-        raise RuntimeError(f"dbt run failed: {result.stderr}")
 
-    logger.info(f"dbt run output:\n{result.stdout}")
+@task(name="dbt-seed", retries=1, log_prints=True)
+def dbt_seed() -> str:
+    """Load reference seeds into the DuckDB catalog.
+
+    Seeds live in the ephemeral DuckDB file (not Postgres), so we (re)load them
+    every run — cheap (a few hundred rows) and required before the models can
+    join against them.
+    """
+    logger = get_run_logger()
+    logger.info("dbt seed: loading reference tables")
+    result = _run_dbt(["seed"])
+    if result.returncode != 0:
+        logger.error(f"dbt seed failed:\n{result.stdout}\n{result.stderr}")
+        raise RuntimeError("dbt seed failed")
+    logger.info(result.stdout)
     return result.stdout
 
 
-@task(name="dbt-test-gold", log_prints=True)
-def run_dbt_tests() -> str:
-    """Run dbt tests on Gold models — data quality checks."""
+@task(name="dbt-run", retries=1, log_prints=True)
+def dbt_run() -> str:
+    """Build the whole medallion — Silver + Gold — in dependency order."""
     logger = get_run_logger()
-    logger.info("Running dbt tests on Gold models...")
-
-    result = subprocess.run(
-        ["dbt", "test", "--select", "gold", "--profiles-dir", str(DBT_PROJECT_DIR)],
-        cwd=str(DBT_PROJECT_DIR),
-        capture_output=True,
-        text=True,
-    )
-
+    logger.info("dbt run: building Silver + Gold models")
+    result = _run_dbt(["run"])
     if result.returncode != 0:
-        logger.warning(f"dbt test failures:\n{result.stdout}")
-        # Don't raise — log warnings but don't fail the pipeline.
-        # Tests alert us to data quality issues, they don't block delivery.
+        logger.error(f"dbt run failed:\n{result.stdout}\n{result.stderr}")
+        raise RuntimeError("dbt run failed")
+    logger.info(result.stdout)
+    return result.stdout
 
-    logger.info(f"dbt test output:\n{result.stdout}")
+
+@task(name="dbt-test", log_prints=True)
+def dbt_test() -> str:
+    """Run data-quality tests.
+
+    Non-blocking by design: tests alert us to data-quality issues, they don't
+    block delivery (same resilience principle the ingestion flow uses).
+    """
+    logger = get_run_logger()
+    logger.info("dbt test: running data-quality checks")
+    result = _run_dbt(["test"])
+    if result.returncode != 0:
+        logger.warning(f"dbt test failures (non-blocking):\n{result.stdout}")
+    else:
+        logger.info(result.stdout)
     return result.stdout
 
 
 @flow(name="daily-transforms", log_prints=True)
 def daily_transforms() -> dict:
-    """Full transform pipeline: DuckDB Silver → dbt Gold.
-
-    Dependency order:
-    - silver_events, silver_market, silver_headlines (independent)
-    - silver_event_market runs after events + market complete
-    - dbt Gold runs after Silver is complete
-    - dbt tests run after Gold models are built
-    """
+    """Full medallion transform via dbt-duckdb: seed → run (Silver+Gold) → test."""
     logger = get_run_logger()
-    logger.info("=== Starting Medallion Transforms ===")
+    logger.info("=== Starting Medallion Transforms (dbt-duckdb) ===")
 
-    # Stage 1: Independent Silver transforms
-    events_count = run_silver_events()
-    market_count = run_silver_market()
-    headlines_count = run_silver_headlines()
+    dbt_seed()
+    dbt_run()
+    dbt_test()
 
-    # Stage 2: Dependent Silver transform (needs events + market)
-    event_market_count = run_silver_event_market(
-        wait_for=[events_count, market_count]
-    )
-
-    # Stage 3: dbt Gold models (after all Silver tables are populated)
-    dbt_output = run_dbt_gold(wait_for=[event_market_count, headlines_count])
-
-    # Stage 4: dbt data quality tests
-    test_output = run_dbt_tests(wait_for=[dbt_output])
-
-    silver_results = {
-        "silver_events": events_count,
-        "silver_market": market_count,
-        "silver_headlines": headlines_count,
-        "silver_event_market": event_market_count,
-    }
-
-    logger.info(f"Silver transforms: {silver_results}")
     logger.info("=== Medallion Transforms Complete ===")
-
-    return {
-        "silver": silver_results,
-        "gold": "dbt run complete",
-        "tests": "dbt tests complete",
-    }
+    return {"status": "complete", "engine": "dbt-duckdb"}
 
 
 if __name__ == "__main__":

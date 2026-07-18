@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: silver_events
+    description: "Cleaned, classified, deduplicated GDELT events (Bronze → Silver)."
+    columns:
+      - name: event_id
+        description: "GDELT global_event_id — unique after dedup."
+        tests:
+          - not_null
+          - unique
+      - name: event_date
+        tests:
+          - not_null
+      - name: event_group
+        description: "High-level CAMEO grouping."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['verbal_cooperation', 'material_cooperation', 'verbal_conflict', 'material_conflict', 'violent_conflict', 'other']
+      - name: event_root_code
+        tests:
+          - not_null
+
+  - name: silver_market
+    description: "Market OHLCV with rolling return/volatility metrics (Bronze → Silver)."
+    columns:
+      - name: symbol
+        tests:
+          - not_null
+      - name: date
+        tests:
+          - not_null
+      - name: close
+        tests:
+          - not_null
+
+  - name: silver_headlines
+    description: "Deduped, source-normalized headlines with FinBERT sentiment (Bronze → Silver)."
+    columns:
+      - name: headline_id
+        tests:
+          - not_null
+          - unique
+      - name: published_date
+        tests:
+          - not_null
+      - name: sentiment_score
+        tests:
+          - not_null
+
+  - name: silver_event_market
+    description: "Cross-domain event→market link, one row per (event_date, country, symbol)."
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+      - name: symbol
+        tests:
+          - not_null
+      - name: dominant_event_group
+        tests:
+          - accepted_values:
+              values: ['verbal_cooperation', 'material_cooperation', 'verbal_conflict', 'material_conflict', 'violent_conflict', 'other']

@@ -42,10 +42,12 @@ torch>=2.0.0
 sentence-transformers>=3.0.0
 
 # Medallion Architecture
-# DuckDB is the Silver-layer compute engine (Bronze→Silver); reads/writes
-# Postgres via the postgres extension. Right-sized for ~1.5M-row data — no JVM.
+# DuckDB is the compute engine for the ENTIRE medallion (Bronze→Silver→Gold),
+# driven by dbt. dbt-duckdb ATTACHes Postgres via the postgres extension, reads
+# Bronze, and materializes Silver + Gold back into Postgres. Right-sized for
+# ~1.5M-row data — one engine, one lineage graph, no JVM.
 duckdb>=1.1.0
-dbt-postgres>=1.8.0
+dbt-duckdb>=1.9.0
 
 # Utilities
 python-dotenv>=1.0.0

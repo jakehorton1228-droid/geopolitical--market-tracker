@@ -59,6 +59,14 @@ data/
 *.csv
 *.zip
 *.parquet
+# dbt seeds are code, not data — keep them despite the *.csv rule above
+!backend/dbt_project/seeds/*.csv
+
+# dbt generated artifacts
+backend/dbt_project/target/
+backend/dbt_project/dbt_packages/
+backend/dbt_project/logs/
+backend/dbt_project/.user.yml
 
 # Secrets
 credentials.json

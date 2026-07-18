@@ -13,4 +13,4 @@ select
     volatility_20d,
     volume_zscore,
     is_trading_day
-from {{ source('silver', 'silver_market') }}
+from {{ ref('silver_market') }}

@@ -26,8 +26,13 @@ select
 
 from {{ ref('stg_events') }}
 
+-- One row per (date, country): drop events with no resolvable country. This also
+-- keeps the incremental unique_key (event_date, country_code) NULL-free so the
+-- merge dedupes reliably across runs.
+where country_code is not null
+
 {% if is_incremental() %}
-where event_date > (select max(event_date) from {{ this }})
+  and event_date > (select max(event_date) from {{ this }})
 {% endif %}
 
 group by event_date, country_code
