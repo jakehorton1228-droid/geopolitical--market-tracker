@@ -1,15 +1,15 @@
 # Geopolitical Market Intelligence Platform
 
-A data engineering–driven intelligence platform that fuses geopolitical events, financial markets, economic indicators, news sentiment, and prediction market odds through a **medallion architecture** (Bronze → Silver → Gold). DuckDB transforms clean and enrich raw data, dbt models build business-ready Gold marts, and domain-specific AI agents query the marts to deliver real-time intelligence briefings.
+A data engineering–driven intelligence platform that fuses geopolitical events, financial markets, economic indicators, news sentiment, and prediction market odds through a **medallion architecture** (Bronze → Silver → Gold). **dbt models running on DuckDB** build the entire Silver + Gold medallion (DuckDB is the compute engine; Postgres stays the storage/serving layer), and domain-specific AI agents query the marts to deliver real-time intelligence briefings.
 
 ## About This Project
 
 This is a portfolio project showcasing modern data engineering and AI agent systems. The pipeline is the product — it ingests from 5 live data sources, transforms through a three-layer medallion architecture, and serves analysis through both a REST API and an agentic LLM interface.
 
 **Skills demonstrated:**
-- **Data Engineering**: Medallion architecture (Bronze → Silver → Gold), DuckDB transforms (SQL-based, right-sized — reads/writes Postgres via the postgres extension, no JVM), dbt models with incremental materialization, data quality testing, lineage tracking
-- **Orchestration**: Prefect flows coordinating ingestion → analysis → DuckDB Silver → dbt Gold
-- **SQL**: Window functions (LAG, rolling aggregates), CTEs, incremental models, custom dbt tests
+- **Data Engineering**: Medallion architecture (Bronze → Silver → Gold) built entirely with **dbt on DuckDB** — one engine, one lineage graph, right-sized (reads/writes Postgres via the postgres extension, no JVM). Seeds for reference data, incremental materialization, data quality testing, lineage tracking
+- **Orchestration**: Prefect flows coordinating a 4-stage pipeline — ingest (extract-load) → enrich (ML) → transform (dbt) → analytics
+- **SQL**: Window functions (LAG, rolling aggregates), CTEs, incremental models, dbt seeds, custom dbt tests
 - **AI Engineering**: LangGraph multi-agent orchestration, local LLM inference (Ollama + Gemma 4 26B MoE), RAG with pgvector, LangSmith observability
 - **Machine Learning**: Event-impact prediction (5 models), MLflow experiment tracking, champion/challenger promotion, time-series aware train/val/test splits
 - **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic, PostgreSQL + pgvector
@@ -32,7 +32,7 @@ This is a portfolio project showcasing modern data engineering and AI agent syst
 │  events │ market_data │ news_headlines │ economic_indicators │     │
 │  prediction_markets                                                │
 └────────────────────────────────┬────────────────────────────────────┘
-                                 │ DuckDB transforms
+                                 │ dbt on DuckDB (+ seeds)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                 SILVER (Cleaned, Typed, Joined)                    │
@@ -45,7 +45,7 @@ This is a portfolio project showcasing modern data engineering and AI agent syst
                                  │ dbt models (incremental)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    GOLD (Business-Ready Marts)                     │
+│                    GOLD (Business-Ready Marts)   [dbt on DuckDB]    │
 │  gold_geopolitical_daily  — Daily event aggregates by country      │
 │  gold_market_daily        — Market data + anomaly flags            │
 │  gold_sentiment_daily     — Sentiment by source + "all" aggregate  │
@@ -74,7 +74,7 @@ This is a portfolio project showcasing modern data engineering and AI agent syst
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Prefect Orchestration                           │
-│  Daily: Ingest → Analysis → DuckDB Silver → dbt Gold               │
+│  Daily: Ingest → Enrich → Transform (dbt/DuckDB) → Analytics       │
 │  Weekly: Event Feature Engineering → 5-Model Training → MLflow     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -93,11 +93,11 @@ Five data sources land in raw tables via Prefect-orchestrated ingestion flows. D
 | `economic_indicators` | FRED | `(series_id, date)` |
 | `prediction_markets` | Polymarket | `(market_id, snapshot_date)` |
 
-### Silver Layer (DuckDB Transforms)
+### Silver Layer (dbt models on DuckDB)
 
-DuckDB transforms clean, type, enrich, and join Bronze data — reading and writing Postgres directly via the postgres extension (DuckDB is the compute engine; Postgres stays the storage layer). Right-sized for this ~1.5M-row dataset: no JVM, no cluster. The SQL ports to MotherDuck/Snowflake/BigQuery if the data ever outgrows a single node.
+dbt models clean, type, enrich, and join Bronze data. dbt runs on **DuckDB**, which attaches Postgres via the postgres extension, reads Bronze, and materializes Silver back into Postgres (DuckDB is the compute engine; Postgres stays the storage layer). Reference maps (CAMEO groups, FIPS→ISO, country→asset) are **dbt seeds** generated from `constants.py`. Right-sized for this ~1.5M-row dataset: no JVM, no cluster. The SQL ports to MotherDuck/Snowflake/BigQuery if the data ever outgrows a single node.
 
-| Transform | What it does | Key SQL features |
+| Model | What it does | Key SQL features |
 |-----------|-------------|------------------|
 | `silver_events` | Deterministic dedup on `global_event_id`, classify via CAMEO → `event_group`, normalize FIPS → ISO country codes, add `is_significant` flag | `row_number()` dedup, map lookups via `LEFT JOIN`, `COALESCE` |
 | `silver_market` | Dedup on `(symbol, date)`, compute rolling returns (5d, 20d), rolling volatility, volume z-score | window frames (`ROWS BETWEEN`), `LAG()`, `STDDEV_SAMP()` |
@@ -106,7 +106,7 @@ DuckDB transforms clean, type, enrich, and join Bronze data — reading and writ
 
 ### Gold Layer (dbt Models)
 
-dbt builds business-ready marts from Silver tables with incremental materialization, schema tests, and documentation. Run `dbt docs serve` to view the full lineage DAG.
+dbt builds business-ready marts from the Silver models (same dbt-on-DuckDB project) with incremental materialization, schema tests, and documentation. Run `dbt docs serve` to view the full lineage DAG — one graph spanning seeds → Bronze sources → Silver → Gold.
 
 | Model | Grain | Key Metrics | Tested |
 |-------|-------|-------------|--------|
@@ -193,7 +193,7 @@ make start
 
 # Ingest data + run transforms
 make ingest-all       # Fetch from all 5 sources
-make transforms       # DuckDB Silver + dbt Gold
+make transforms       # dbt build: Silver + Gold on DuckDB
 
 # Optional
 make train            # Train ML models (requires historical data)
@@ -227,13 +227,6 @@ make dev-frontend     # Terminal 2
 geopolitical--market-tracker/
 ├── backend/
 │   ├── src/
-│   │   ├── transforms/                    # DuckDB Silver layer
-│   │   │   ├── db.py                       # DuckDB connection + Postgres IO
-│   │   │   ├── mappings.py                 # CAMEO/FIPS/asset lookup tables
-│   │   │   ├── silver_events.py           # Bronze events → Silver (dedup, classify, normalize)
-│   │   │   ├── silver_market.py           # Bronze market → Silver (rolling returns, volatility)
-│   │   │   ├── silver_headlines.py        # Bronze headlines → Silver (normalize, filter)
-│   │   │   └── silver_event_market.py     # Silver events + market → cross-domain join
 │   │   ├── agent/                         # LangGraph AI agent pipeline
 │   │   ├── analysis/                      # Correlation, patterns, anomaly, sentiment, RAG
 │   │   ├── training/                      # ML model training + MLflow
@@ -242,18 +235,23 @@ geopolitical--market-tracker/
 │   │   ├── rag/                           # pgvector retrieval + context
 │   │   ├── db/                            # SQLAlchemy models + queries
 │   │   ├── config/                        # Settings, constants, symbol mappings
-│   │   └── ingestion/                     # GDELT, Yahoo Finance, RSS, FRED, Polymarket
-│   ├── dbt_project/                       # dbt Gold layer
+│   │   └── ingestion/                     # GDELT, Yahoo Finance, RSS, FRED, Polymarket (pure extract-load)
+│   ├── dbt_project/                       # dbt-on-DuckDB medallion (Silver + Gold)
 │   │   ├── models/
-│   │   │   ├── staging/                   # Thin views over Silver tables
+│   │   │   ├── silver/                    # 4 Silver models (dedup, classify, join, window fns)
+│   │   │   ├── staging/                   # Ephemeral passthroughs (lineage)
 │   │   │   └── gold/                      # 5 Gold mart models (incremental)
+│   │   ├── seeds/                         # CAMEO/FIPS/country-asset reference CSVs
 │   │   ├── tests/                         # Custom data quality tests
-│   │   └── macros/                        # risk_level composite scoring
-│   ├── flows/                             # Prefect orchestration
-│   │   ├── ingestion_flow.py              # Daily ingestion (5 sources)
-│   │   ├── analysis_flow.py               # Daily analysis
-│   │   ├── transform_flow.py             # DuckDB Silver → dbt Gold
-│   │   ├── daily_pipeline.py              # Master: ingest → analyze → transform
+│   │   ├── macros/                        # risk_level scoring + generate_schema_name
+│   │   ├── profiles.yml                   # dbt-duckdb: attaches Postgres as `pg`
+│   │   └── dbt_project.yml
+│   ├── flows/                             # Prefect orchestration (4 stages)
+│   │   ├── ingestion_flow.py              # 1. Ingest — extract-load, 5 sources
+│   │   ├── enrich_flow.py                 # 2. Enrich — sentiment (FinBERT) + embeddings
+│   │   ├── transform_flow.py              # 3. Transform — dbt build (Silver + Gold)
+│   │   ├── analysis_flow.py               # 4. Analytics — correlations + patterns
+│   │   ├── daily_pipeline.py              # Master: ingest → enrich → transform → analytics
 │   │   └── training_flow.py               # Weekly ML training
 │   ├── notebooks/                         # DuckDB data-exploration notebook
 │   ├── alembic/                           # Database migrations
@@ -296,11 +294,11 @@ geopolitical--market-tracker/
 
 ```bash
 make start              # Start all Docker services
-make ingest-all         # Ingest from all 5 sources + NLP processing
-make transforms         # Run DuckDB Silver + dbt Gold
-make pipeline           # Full daily pipeline (ingest → analyze → transform)
+make ingest-all         # Ingest from all 5 sources (extract-load)
+make transforms         # dbt build: Silver + Gold on DuckDB
+make pipeline           # Full daily pipeline (ingest → enrich → transform → analytics)
 make train              # Train ML models, log to MLflow
-make dbt-run            # Run dbt Gold models only
+make dbt-run            # Run dbt models (Silver + Gold)
 make dbt-test           # Run dbt data quality tests
 make dbt-docs           # Generate + serve dbt lineage DAG
 make dev-api            # Run API locally (dev mode)

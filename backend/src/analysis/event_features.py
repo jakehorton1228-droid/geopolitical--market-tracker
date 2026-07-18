@@ -46,6 +46,7 @@ from sqlalchemy import select, func, or_
 from src.config.constants import COUNTRY_ASSET_MAP, EVENT_GROUPS
 from src.db.connection import get_session
 from src.db.models import Event, MarketData, NewsHeadline
+from src.db.queries import get_silver_market
 
 logger = logging.getLogger(__name__)
 
@@ -228,20 +229,10 @@ class EventFeaturePipeline:
         market_by_symbol = {}
         with get_session() as session:
             for symbol in symbols:
-                rows = session.execute(
-                    select(
-                        MarketData.date,
-                        MarketData.close,
-                        MarketData.log_return,
-                        MarketData.volume,
-                    ).where(
-                        MarketData.symbol == symbol,
-                        MarketData.date >= earliest.date(),
-                        MarketData.date <= latest.date(),
-                    ).order_by(MarketData.date)
-                ).all()
+                # Read from the dbt-built Silver layer (canonical returns), not Bronze.
+                rows = get_silver_market(session, symbol, earliest.date(), latest.date())
                 if rows:
-                    market_df = pd.DataFrame(rows, columns=["date", "close", "log_return", "volume"])
+                    market_df = pd.DataFrame(rows)[["date", "close", "log_return", "volume"]]
                     market_df["date"] = pd.to_datetime(market_df["date"]).dt.date
                     market_df["close"] = market_df["close"].astype(float)
                     market_df["log_return"] = market_df["log_return"].fillna(0).astype(float)

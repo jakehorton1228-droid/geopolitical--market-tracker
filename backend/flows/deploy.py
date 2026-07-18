@@ -16,5 +16,5 @@ if __name__ == "__main__":
         name="daily-pipeline-deployment",
         cron="0 6 * * *",  # 6:00 AM UTC daily
         tags=["daily", "production"],
-        description="Daily ingestion (GDELT + Yahoo Finance) followed by analysis (correlations + patterns)",
+        description="Daily medallion pipeline: ingest (EL) → enrich (sentiment/embeddings) → transform (dbt-duckdb Silver+Gold) → analytics (correlations + patterns)",
     )

@@ -10,8 +10,9 @@ are fetched in full each run — deduplication happens at the DB level.
 FRED series are fetched with a 90-day window to catch revisions and
 backfill any gaps.
 
-After ingestion, new headlines and events are automatically embedded
-and sentiment-scored so they're immediately available for RAG search.
+This flow is pure extract-load: it lands raw data in the Bronze tables and does
+nothing else. Enrichment (sentiment + embeddings) is the next pipeline stage
+(enrich_flow.py); transforms run after that (dbt).
 """
 
 from datetime import date, timedelta
@@ -22,8 +23,6 @@ from src.ingestion.market_data import MarketDataIngestion
 from src.ingestion.rss_feeds import RSSIngestion
 from src.ingestion.fred import FREDIngestion
 from src.ingestion.polymarket import PolymarketIngestion
-from src.analysis.sentiment import score_unprocessed_headlines
-from src.analysis.embeddings import embed_unprocessed_headlines, embed_unprocessed_events
 
 
 @task(name="ingest-events", retries=3, retry_delay_seconds=60, log_prints=True)
@@ -125,55 +124,17 @@ def ingest_polymarket() -> dict:
     return {"snapshots_ingested": count}
 
 
-@task(name="post-ingest-nlp", retries=1, retry_delay_seconds=30, log_prints=True)
-def post_ingest_nlp() -> dict:
-    """
-    Score sentiment and generate embeddings for newly ingested content.
-
-    Runs immediately after ingestion so new headlines/events are
-    searchable via RAG without waiting for the full analysis pipeline.
-    Only processes rows with NULL sentiment_score or NULL embedding,
-    so it's fast when there's little new content.
-    """
-    logger = get_run_logger()
-    logger.info("Running post-ingestion NLP (sentiment + embeddings)")
-
-    from src.db.connection import get_session
-
-    try:
-        with get_session() as session:
-            n_scored = score_unprocessed_headlines(session)
-        logger.info(f"Scored {n_scored} headlines")
-    except Exception as e:
-        logger.warning(f"Sentiment scoring failed: {e}")
-        n_scored = 0
-
-    try:
-        with get_session() as session:
-            n_headlines = embed_unprocessed_headlines(session)
-        with get_session() as session:
-            n_events = embed_unprocessed_events(session)
-        logger.info(f"Embedded {n_headlines} headlines, {n_events} events")
-    except Exception as e:
-        logger.warning(f"Embedding generation failed: {e}")
-        n_headlines, n_events = 0, 0
-
-    return {
-        "headlines_scored": n_scored,
-        "headlines_embedded": n_headlines,
-        "events_embedded": n_events,
-    }
-
-
 @flow(name="daily-ingestion", log_prints=True)
 def daily_ingestion() -> dict:
-    """Run daily data ingestion: events + market data + RSS + FRED + Polymarket, then NLP.
+    """Run daily extract-load: events + market data + RSS + FRED + Polymarket.
+
+    Pure extract-load — lands raw data in Bronze, nothing more. Enrichment
+    (sentiment + embeddings) and transforms are separate downstream stages.
 
     Uses a "continue on failure" pattern — each source is independent, so one
     source failing (e.g., missing API key, API downtime) should NOT block the
     others. This is a core data engineering principle: pipelines should be
-    resilient. If FRED is down, GDELT data should still flow through to Silver
-    and Gold.
+    resilient. If FRED is down, GDELT data should still flow through.
 
     Each task is wrapped in try/except. Failures are logged and tracked in the
     results dict, but the flow continues. The return value tells you exactly
@@ -199,14 +160,6 @@ def daily_ingestion() -> dict:
             logger.warning(f"{name} ingestion failed: {e}")
             results[name] = {"status": "failed", "error": str(e)}
             failures.append(name)
-
-    # NLP post-processing runs on whatever was successfully ingested
-    try:
-        results["nlp"] = post_ingest_nlp()
-    except Exception as e:
-        logger.warning(f"NLP post-processing failed: {e}")
-        results["nlp"] = {"status": "failed", "error": str(e)}
-        failures.append("nlp")
 
     if failures:
         logger.warning(f"Ingestion completed with failures: {failures}")

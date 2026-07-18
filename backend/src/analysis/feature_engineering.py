@@ -45,7 +45,7 @@ from sqlalchemy import select, func, case, and_
 
 from src.db.connection import get_session
 from src.db.models import Event
-from src.db.queries import get_market_data, get_events_by_date_range
+from src.db.queries import get_silver_market, get_events_by_date_range
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,12 @@ class FeatureEngineering:
 
         Returns:
             DataFrame with date, close, log_return, and optionally volume
+
+        Reads the dbt-built silver_market table (canonical returns), not raw
+        Bronze — analytics consume the Silver layer.
         """
         with get_session() as session:
-            market_data = get_market_data(session, symbol, start_date, end_date)
+            market_data = get_silver_market(session, symbol, start_date, end_date)
 
             if not market_data:
                 return pd.DataFrame()
@@ -92,13 +95,13 @@ class FeatureEngineering:
             rows = []
             for m in market_data:
                 row = {
-                    "date": m.date,
-                    "close": float(m.close),
-                    "log_return": m.log_return,
-                    "daily_return": m.daily_return,
+                    "date": m["date"],
+                    "close": float(m["close"]),
+                    "log_return": m["log_return"],
+                    "daily_return": m["daily_return"],
                 }
                 if include_volume:
-                    row["volume"] = m.volume
+                    row["volume"] = m["volume"]
                 rows.append(row)
 
             return pd.DataFrame(rows).sort_values("date").reset_index(drop=True)

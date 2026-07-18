@@ -11,7 +11,7 @@ Learning note: The repository pattern is widely used in industry because:
 """
 
 from datetime import date, timedelta
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, text
 from sqlalchemy.orm import Session
 
 from src.db.models import (
@@ -183,6 +183,36 @@ def get_market_data_for_symbols(
         MarketData.date >= start_date,
         MarketData.date <= end_date,
     ).order_by(MarketData.symbol, MarketData.date).all()
+
+
+def get_silver_market(
+    session: Session,
+    symbol: str,
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    """Fetch cleaned Silver market rows for a symbol within a date range.
+
+    Reads the dbt-built `silver_market` table — the canonical analytics source,
+    with returns computed over full per-symbol history (correct even when Bronze
+    was loaded incrementally). The analytics layer uses this instead of reading
+    raw Bronze `market_data`. There's no ORM model for silver_market (dbt owns
+    it), so this is a plain SQL read returning dict rows.
+    """
+    result = session.execute(
+        text(
+            """
+            SELECT date, close, daily_return, log_return, volume
+            FROM silver_market
+            WHERE symbol = :symbol
+              AND date >= :start_date
+              AND date <= :end_date
+            ORDER BY date
+            """
+        ),
+        {"symbol": symbol, "start_date": start_date, "end_date": end_date},
+    )
+    return [dict(row) for row in result.mappings().all()]
 
 
 def get_latest_market_date(session: Session, symbol: str) -> date | None:

@@ -42,7 +42,7 @@ from src.config.settings import (
     SIGNIFICANCE_LEVEL,
 )
 from src.db.connection import get_session
-from src.db.queries import get_market_data
+from src.db.queries import get_silver_market
 
 logger = logging.getLogger(__name__)
 
@@ -112,15 +112,15 @@ class ProductionEventStudy:
         start_date: date,
         end_date: date,
     ) -> pd.Series:
-        """Fetch returns from database."""
+        """Fetch returns from the Silver layer (canonical returns)."""
         with get_session() as session:
-            data = get_market_data(session, symbol, start_date, end_date)
+            data = get_silver_market(session, symbol, start_date, end_date)
 
             if not data:
                 return pd.Series(dtype=float)
 
             df = pd.DataFrame([
-                {"date": d.date, "return": d.log_return}
+                {"date": d["date"], "return": d["log_return"]}
                 for d in data
             ]).set_index("date").sort_index()
 
