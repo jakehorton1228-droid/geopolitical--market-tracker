@@ -11,7 +11,7 @@
 .PHONY: help up down start stop restart logs build clean migrate \
         dev-api dev-frontend dev test lint \
         ingest-events ingest-market ingest-all \
-        pipeline prefect-logs train pull-model
+        pipeline prefect-logs train pull-model ollama-serve ollama-stop
 
 # Default target
 .DEFAULT_GOAL := help
@@ -149,6 +149,9 @@ ollama-serve: ## Start native Ollama server (run this in a separate terminal)
 	@echo "$(BLUE)Starting native Ollama server (uses Metal GPU on Apple Silicon)...$(NC)"
 	@command -v ollama >/dev/null 2>&1 || { echo "$(RED)Ollama not installed. Run: brew install ollama$(NC)"; exit 1; }
 	ollama serve
+
+ollama-stop: ## Stop the native Ollama server started by ollama-serve
+	@pkill -f "ollama serve" 2>/dev/null && echo "$(GREEN)Ollama server stopped.$(NC)" || echo "$(YELLOW)No running Ollama server found.$(NC)"
 
 # ============================================================================
 # LOCAL DEVELOPMENT (without Docker for API/frontend, DB via Docker)
