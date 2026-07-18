@@ -26,9 +26,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # to download it at runtime (keeps the worker resilient to network hiccups).
 RUN python -c "import duckdb; duckdb.connect().execute('INSTALL postgres')"
 
-# Copy application code and flows
+# Copy application code, flows, and the dbt project (the transform stage runs
+# `dbt` from /app/dbt_project — see flows/transform_flow.py).
 COPY src/ ./src/
 COPY flows/ ./flows/
+COPY dbt_project/ ./dbt_project/
 
 # Run the deployment (serves the flow and picks up scheduled runs)
 CMD ["python", "-m", "flows.deploy"]

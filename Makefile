@@ -282,12 +282,12 @@ f.ingest_all_series(start_date=date.today() - timedelta(days=365), end_date=date
 
 pipeline: ## Run the daily pipeline manually (ingest → enrich → transform → analytics)
 	@echo "$(BLUE)Running daily pipeline...$(NC)"
-	docker exec gmt-api python -m flows.daily_pipeline
+	docker exec gmt-worker python -m flows.daily_pipeline
 	@echo "$(GREEN)Pipeline complete.$(NC)"
 
 transforms: ## Run medallion transforms (dbt build: Silver + Gold on DuckDB)
 	@echo "$(BLUE)Running medallion transforms...$(NC)"
-	$(ACTIVATE) python -m flows.transform_flow
+	docker exec gmt-worker python -m flows.transform_flow
 	@echo "$(GREEN)Transforms complete.$(NC)"
 
 dbt-run: ## Seed + run all dbt models (Silver + Gold)
