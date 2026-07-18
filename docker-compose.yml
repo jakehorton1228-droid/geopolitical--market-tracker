@@ -169,7 +169,7 @@ services:
   # PGADMIN (database visualization)
   # ===========================================================================
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.9  # pinned tag (was floating :latest) for reproducible, auditable builds
     container_name: gmt-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
