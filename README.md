@@ -209,7 +209,10 @@ make dbt-docs         # View dbt lineage DAG
 ### Local Development
 
 ```bash
-python -m venv venv && source venv/bin/activate
+# libomp is XGBoost's OpenMP runtime (needed to import/train the champion model)
+brew install libomp
+
+python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 
 make up-db

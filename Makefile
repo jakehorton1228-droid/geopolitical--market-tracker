@@ -27,7 +27,7 @@ NC := \033[0m # No Color
 BACKEND := backend
 
 # Activate venv with backend on PYTHONPATH
-ACTIVATE := . venv/bin/activate && PYTHONPATH=$(BACKEND)
+ACTIVATE := . .venv/bin/activate && PYTHONPATH=$(BACKEND)
 
 # ============================================================================
 # HELP
@@ -353,5 +353,5 @@ setup: ## Full setup: install deps, start DB, run migrations
 	$(MAKE) up-db
 	@echo "$(YELLOW)Waiting for database to be ready...$(NC)"
 	sleep 5
-	. venv/bin/activate && cd $(BACKEND) && alembic upgrade head
+	. .venv/bin/activate && cd $(BACKEND) && alembic upgrade head
 	@echo "$(GREEN)Setup complete! Run 'make up' to start all services.$(NC)"
