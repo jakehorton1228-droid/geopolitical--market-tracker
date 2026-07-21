@@ -5,16 +5,18 @@ Endpoints for querying historical frequency patterns.
 "When X happens, Y goes UP Z% of the time."
 """
 
-from datetime import date, timedelta
+from datetime import date
 import logging
 from fastapi import APIRouter, HTTPException, Query
+
+from src.api.schemas import HistoricalPatternResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/patterns", tags=["Historical Patterns"])
 
 
-@router.get("/{symbol}", response_model=dict)
+@router.get("/{symbol}", response_model=HistoricalPatternResponse)
 def get_pattern(
     symbol: str,
     start_date: date | None = Query(None, description="Start date (default: 365 days ago)"),
@@ -45,7 +47,7 @@ def get_pattern(
 
     if pattern is None:
         raise HTTPException(
-            status_code=422,
+            status_code=404,
             detail=f"Insufficient data for pattern analysis on {symbol}",
         )
 
@@ -66,7 +68,7 @@ def get_pattern(
     }
 
 
-@router.get("/{symbol}/all", response_model=list[dict])
+@router.get("/{symbol}/all", response_model=list[HistoricalPatternResponse])
 def get_all_patterns(
     symbol: str,
     start_date: date | None = Query(None),

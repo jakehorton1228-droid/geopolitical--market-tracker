@@ -19,6 +19,19 @@ DATABASE_URL = os.getenv(
     "postgresql://gmt:gmt_password@localhost:5432/geopolitical_market_tracker"
 )
 
+# CORS — origins allowed to call the API from a browser.
+# Defaults cover local dev (Vite dev server + common React port). In production
+# the frontend is same-origin behind nginx, so override with the real domain(s).
+# Set CORS_ORIGINS as a comma-separated list, or "*" to allow all (no credentials).
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://localhost:3000",
+    ).split(",")
+    if o.strip()
+]
+
 # API Keys
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 FRED_API_KEY = os.getenv("FRED_API_KEY")

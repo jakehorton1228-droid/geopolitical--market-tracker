@@ -19,11 +19,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.db.connection import get_session
+from src.api.deps import get_db, DateRange
 from src.db.models import Event, AnalysisResult
 from src.config.constants import CAMEO_CATEGORIES, get_event_group
 from src.api.schemas import (
     AnalysisResultResponse,
+    AnomalyListItem,
+    SignificantResultItem,
+    AnalysisSummaryResponse,
     AnomalyDetectionResponse,
     AnomalyReportResponse,
     EventStudyRequest,
@@ -34,12 +37,6 @@ from src.api.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
-
-
-def get_db():
-    """Dependency to get database session."""
-    with get_session() as session:
-        yield session
 
 
 @router.get("/results", response_model=list[AnalysisResultResponse])
@@ -73,7 +70,7 @@ def list_analysis_results(
         query = query.filter(AnalysisResult.analysis_type == analysis_type)
 
     if is_significant is not None:
-        query = query.filter(AnalysisResult.is_significant == is_significant)
+        query = query.filter(AnalysisResult.is_significant.is_(is_significant))
 
     if min_car is not None:
         query = query.filter(func.abs(AnalysisResult.car) >= min_car)
@@ -85,7 +82,7 @@ def list_analysis_results(
     return results
 
 
-@router.get("/anomalies", response_model=list[dict])
+@router.get("/anomalies", response_model=list[AnomalyListItem])
 def list_anomalies(
     anomaly_type: str | None = Query(None, description="unexplained_move, muted_response, etc."),
     symbol: str | None = Query(None, description="Filter by symbol"),
@@ -105,7 +102,7 @@ def list_anomalies(
     - Get unexplained moves: `?anomaly_type=unexplained_move`
     """
     query = db.query(AnalysisResult, Event).join(Event).filter(
-        AnalysisResult.is_anomaly == True,
+        AnalysisResult.is_anomaly.is_(True),
     )
 
     if anomaly_type:
@@ -122,26 +119,26 @@ def list_anomalies(
     ).limit(limit).all()
 
     return [
-        {
-            "id": r.AnalysisResult.id,
-            "event_id": r.Event.id,
-            "event_date": r.Event.event_date,
-            "event_type": CAMEO_CATEGORIES.get(str(r.Event.event_root_code).zfill(2), r.Event.event_root_code),
-            "event_group": get_event_group(r.Event.event_root_code),
-            "symbol": r.AnalysisResult.symbol,
-            "anomaly_type": r.AnalysisResult.anomaly_type,
-            "anomaly_score": r.AnalysisResult.anomaly_score,
-            "expected_return": r.AnalysisResult.expected_return,
-            "actual_return": r.AnalysisResult.actual_return,
-            "goldstein_scale": r.Event.goldstein_scale,
-            "actor1": r.Event.actor1_name or r.Event.actor1_code,
-            "actor2": r.Event.actor2_name or r.Event.actor2_code,
-        }
+        AnomalyListItem(
+            id=r.AnalysisResult.id,
+            event_id=r.Event.id,
+            event_date=r.Event.event_date,
+            event_type=CAMEO_CATEGORIES.get(str(r.Event.event_root_code).zfill(2), str(r.Event.event_root_code)),
+            event_group=get_event_group(r.Event.event_root_code),
+            symbol=r.AnalysisResult.symbol,
+            anomaly_type=r.AnalysisResult.anomaly_type,
+            anomaly_score=r.AnalysisResult.anomaly_score,
+            expected_return=r.AnalysisResult.expected_return,
+            actual_return=r.AnalysisResult.actual_return,
+            goldstein_scale=r.Event.goldstein_scale,
+            actor1=r.Event.actor1_name or r.Event.actor1_code,
+            actor2=r.Event.actor2_name or r.Event.actor2_code,
+        )
         for r in results
     ]
 
 
-@router.get("/significant", response_model=list[dict])
+@router.get("/significant", response_model=list[SignificantResultItem])
 def list_significant_results(
     symbol: str | None = Query(None),
     min_car: float | None = Query(0.01, description="Minimum absolute CAR (default 1%)"),
@@ -154,7 +151,7 @@ def list_significant_results(
     Only returns results where p-value < 0.05.
     """
     query = db.query(AnalysisResult, Event).join(Event).filter(
-        AnalysisResult.is_significant == True,
+        AnalysisResult.is_significant.is_(True),
         AnalysisResult.analysis_type == "event_study",
     )
 
@@ -169,30 +166,30 @@ def list_significant_results(
     ).limit(limit).all()
 
     return [
-        {
-            "event_id": r.Event.id,
-            "event_date": r.Event.event_date,
-            "event_type": CAMEO_CATEGORIES.get(str(r.Event.event_root_code).zfill(2), r.Event.event_root_code),
-            "symbol": r.AnalysisResult.symbol,
-            "car_pct": r.AnalysisResult.car * 100 if r.AnalysisResult.car else 0,
-            "t_stat": r.AnalysisResult.car_t_stat,
-            "p_value": r.AnalysisResult.car_p_value,
-            "goldstein_scale": r.Event.goldstein_scale,
-            "num_mentions": r.Event.num_mentions,
-        }
+        SignificantResultItem(
+            event_id=r.Event.id,
+            event_date=r.Event.event_date,
+            event_type=CAMEO_CATEGORIES.get(str(r.Event.event_root_code).zfill(2), str(r.Event.event_root_code)),
+            symbol=r.AnalysisResult.symbol,
+            car_pct=r.AnalysisResult.car * 100 if r.AnalysisResult.car else 0,
+            t_stat=r.AnalysisResult.car_t_stat,
+            p_value=r.AnalysisResult.car_p_value,
+            goldstein_scale=r.Event.goldstein_scale,
+            num_mentions=r.Event.num_mentions,
+        )
         for r in results
     ]
 
 
-@router.get("/summary", response_model=dict)
+@router.get("/summary", response_model=AnalysisSummaryResponse)
 def analysis_summary(db: Session = Depends(get_db)):
     """Get summary statistics of all analysis results."""
     total = db.query(func.count(AnalysisResult.id)).scalar() or 0
     significant = db.query(func.count(AnalysisResult.id)).filter(
-        AnalysisResult.is_significant == True
+        AnalysisResult.is_significant.is_(True)
     ).scalar() or 0
     anomalies = db.query(func.count(AnalysisResult.id)).filter(
-        AnalysisResult.is_anomaly == True
+        AnalysisResult.is_anomaly.is_(True)
     ).scalar() or 0
 
     # Anomaly breakdown
@@ -200,18 +197,18 @@ def analysis_summary(db: Session = Depends(get_db)):
         AnalysisResult.anomaly_type,
         func.count(AnalysisResult.id),
     ).filter(
-        AnalysisResult.is_anomaly == True,
+        AnalysisResult.is_anomaly.is_(True),
     ).group_by(
         AnalysisResult.anomaly_type
     ).all()
 
-    return {
-        "total_results": total,
-        "significant_results": significant,
-        "significance_rate": significant / total if total > 0 else 0,
-        "total_anomalies": anomalies,
-        "anomaly_breakdown": {t: c for t, c in anomaly_types if t},
-    }
+    return AnalysisSummaryResponse(
+        total_results=total,
+        significant_results=significant,
+        significance_rate=significant / total if total > 0 else 0,
+        total_anomalies=anomalies,
+        anomaly_breakdown={t: c for t, c in anomaly_types if t},
+    )
 
 
 # =============================================================================
@@ -236,7 +233,7 @@ def run_event_study(request: EventStudyRequest):
 
         if result is None:
             raise HTTPException(
-                status_code=422,
+                status_code=404,
                 detail=f"Insufficient data for event study on {request.symbol} at {request.event_date}",
             )
 
@@ -267,16 +264,15 @@ def run_event_study(request: EventStudyRequest):
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Event study failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Event study failed")
+        raise HTTPException(status_code=500, detail="Event study failed unexpectedly.")
 
 
 @router.get("/regression/{symbol}", response_model=RegressionResponse)
 def run_regression(
     symbol: str,
-    start_date: date = Query(None, description="Start date (default: 365 days ago)"),
-    end_date: date = Query(None, description="End date (default: today)"),
+    dates: tuple[date, date] = Depends(DateRange(365)),
 ):
     """
     Run OLS regression analysis for a symbol using statsmodels.
@@ -291,17 +287,14 @@ def run_regression(
     try:
         from src.analysis.production_regression import ProductionRegression
 
-        if end_date is None:
-            end_date = date.today()
-        if start_date is None:
-            start_date = end_date - timedelta(days=365)
+        start_date, end_date = dates
 
         regression = ProductionRegression()
         result = regression.analyze(symbol, start_date, end_date)
 
         if result is None:
             raise HTTPException(
-                status_code=422,
+                status_code=404,
                 detail=f"Insufficient data for regression on {symbol}",
             )
 
@@ -329,9 +322,9 @@ def run_regression(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Regression failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Regression failed")
+        raise HTTPException(status_code=500, detail="Regression failed unexpectedly.")
 
 
 @router.get("/anomalies/detect", response_model=AnomalyReportResponse)
@@ -394,8 +387,6 @@ def detect_anomalies(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Anomaly detection failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+    except Exception:
+        logger.exception("Anomaly detection failed")
+        raise HTTPException(status_code=500, detail="Anomaly detection failed unexpectedly.")

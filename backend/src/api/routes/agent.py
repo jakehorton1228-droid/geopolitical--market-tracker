@@ -91,6 +91,6 @@ def agent_chat(req: ChatRequest):
             iterations=result.get("iteration", 0),
             traced=LANGSMITH_TRACING_ENABLED,
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Agent chat error")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Agent pipeline failed unexpectedly.")

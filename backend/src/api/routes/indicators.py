@@ -9,11 +9,11 @@ USAGE:
     GET /api/indicators/{series_id} - Time series for a single indicator
 """
 
-from datetime import date, timedelta
-from fastapi import APIRouter, Depends, Query
+from datetime import date
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from src.db.connection import get_session
+from src.api.deps import get_db, DateRange
 from src.db.queries import (
     get_indicators_with_deltas,
     get_indicators_by_series,
@@ -21,12 +21,6 @@ from src.db.queries import (
 from src.api.schemas import IndicatorResponse, IndicatorWithDeltaResponse
 
 router = APIRouter(prefix="/indicators", tags=["Indicators"])
-
-
-def get_db():
-    """Dependency to get database session."""
-    with get_session() as session:
-        yield session
 
 
 @router.get("/latest", response_model=list[IndicatorWithDeltaResponse])
@@ -44,8 +38,7 @@ def latest_indicators(db: Session = Depends(get_db)):
 @router.get("/{series_id}", response_model=list[IndicatorResponse])
 def indicator_series(
     series_id: str,
-    start_date: date | None = Query(None, description="Start of date range"),
-    end_date: date | None = Query(None, description="End of date range"),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     db: Session = Depends(get_db),
 ):
     """
@@ -56,9 +49,6 @@ def indicator_series(
     - CPI last year: `/api/indicators/CPIAUCSL?start_date=2025-03-01`
     - GDP all time: `/api/indicators/GDP`
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     return get_indicators_by_series(db, series_id, start_date, end_date)

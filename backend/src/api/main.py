@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import logging
 import time
 
 from sqlalchemy import text
@@ -38,7 +39,10 @@ from src.api.routes import (
     briefing_router,
 )
 from src.api.schemas import HealthResponse, ErrorResponse
+from src.config.settings import CORS_ORIGINS
 from src.db.connection import get_session
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -106,12 +110,14 @@ app = FastAPI(
 # MIDDLEWARE
 # =============================================================================
 
-# CORS - Allow cross-origin requests (needed for web frontends)
+# CORS - allow the configured frontend origins (see CORS_ORIGINS in settings).
+# allow_credentials is False because the API uses no cookies/session auth; this
+# also keeps a wildcard origin ("*") spec-valid should it ever be configured.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific domains
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -132,12 +138,17 @@ async def add_timing_header(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions gracefully."""
+    """Handle uncaught exceptions gracefully.
+
+    The full exception (with traceback) is logged server-side; the client
+    only ever receives a generic message so internal details never leak.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={
             "error": "Internal Server Error",
-            "detail": str(exc) if app.debug else "An unexpected error occurred",
+            "detail": "An unexpected error occurred",
             "status_code": 500,
         },
     )

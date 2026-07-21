@@ -45,7 +45,7 @@ export default function CorrelationExplorer() {
     symbol, selectedMetric, startDate, endDate,
   )
   const { data: heatmap, isLoading: heatmapLoading } = useCorrelationHeatmap(
-    DEFAULT_SYMBOLS.slice(0, 6).join(','), startDate, endDate, method,
+    DEFAULT_SYMBOLS.slice(0, 6), startDate, endDate, method,
   )
 
   return (

@@ -10,11 +10,11 @@ USAGE:
     GET /api/prediction-markets/{market_id}/history - Probability time series
 """
 
-from datetime import date, timedelta
+from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from src.db.connection import get_session
+from src.api.deps import get_db, DateRange
 from src.db.queries import (
     get_latest_predictions,
     get_prediction_movers,
@@ -26,12 +26,6 @@ from src.api.schemas import (
 )
 
 router = APIRouter(prefix="/prediction-markets", tags=["Prediction Markets"])
-
-
-def get_db():
-    """Dependency to get database session."""
-    with get_session() as session:
-        yield session
 
 
 @router.get("", response_model=list[PredictionMarketResponse])
@@ -69,8 +63,7 @@ def market_movers(
 @router.get("/{market_id}/history", response_model=list[PredictionMarketResponse])
 def market_history(
     market_id: str,
-    start_date: date | None = Query(None, description="Start of date range"),
-    end_date: date | None = Query(None, description="End of date range"),
+    dates: tuple[date, date] = Depends(DateRange(90)),
     db: Session = Depends(get_db),
 ):
     """
@@ -79,9 +72,6 @@ def market_history(
     Returns daily snapshots showing how the crowd's estimated probability
     has changed over time. Useful for charting probability trends.
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=90)
+    start_date, end_date = dates
 
     return get_market_snapshots(db, market_id, start_date, end_date)

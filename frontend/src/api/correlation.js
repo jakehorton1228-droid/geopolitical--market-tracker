@@ -50,6 +50,8 @@ export function useTopCorrelations(start_date, end_date, limit = 20, symbols) {
   })
 }
 
+// `symbols` is an array of ticker strings; the shared client serializes it as
+// repeated `?symbols=...` params for the backend's `list[str]` query parameter.
 export function useCorrelationHeatmap(symbols, start_date, end_date, method = 'pearson') {
   return useQuery({
     queryKey: ['correlation', 'heatmap', symbols, start_date, end_date, method],
@@ -59,6 +61,6 @@ export function useCorrelationHeatmap(symbols, start_date, end_date, method = 'p
       })
       return data
     },
-    enabled: !!symbols,
+    enabled: Array.isArray(symbols) && symbols.length > 0,
   })
 }

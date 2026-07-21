@@ -11,31 +11,28 @@ USAGE:
     GET /api/market/{symbol}/latest - Get latest price for symbol
 """
 
-from datetime import date, timedelta
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import case, func, or_, text
 
-from src.db.connection import get_session
+from src.api.deps import get_db, DateRange
 from src.db.models import MarketData, Event
 from src.config.constants import SYMBOLS, get_all_symbols, get_symbol_info, SYMBOL_COUNTRY_MAP, EVENT_GROUPS
-from src.api.schemas import MarketDataResponse
+from src.api.schemas import (
+    MarketDataResponse,
+    ReturnPointResponse,
+    SymbolStatsResponse,
+)
 
 router = APIRouter(prefix="/market", tags=["Market Data"])
-
-
-def get_db():
-    """Dependency to get database session."""
-    with get_session() as session:
-        yield session
 
 
 @router.get("", response_model=list[MarketDataResponse])
 def list_market_data(
     symbol: str | None = Query(None, description="Single symbol (e.g., CL=F)"),
-    symbols: str | None = Query(None, description="Comma-separated symbols"),
-    start_date: date | None = Query(None, description="Start date"),
-    end_date: date | None = Query(None, description="End date"),
+    symbols: list[str] | None = Query(None, description="Multiple symbols; repeat to pass more than one (e.g. ?symbols=CL=F&symbols=SPY)"),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     limit: int = Query(1000, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -48,10 +45,7 @@ def list_market_data(
     - Get multiple assets: `?symbols=CL=F,GC=F,SPY`
     - Get recent data: `?start_date=2024-01-01`
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     query = db.query(MarketData).filter(
         MarketData.date >= start_date,
@@ -62,8 +56,7 @@ def list_market_data(
     if symbol:
         query = query.filter(MarketData.symbol == symbol)
     elif symbols:
-        symbol_list = [s.strip() for s in symbols.split(",")]
-        query = query.filter(MarketData.symbol.in_(symbol_list))
+        query = query.filter(MarketData.symbol.in_(symbols))
 
     data = query.order_by(
         MarketData.symbol,
@@ -79,6 +72,9 @@ def list_symbols():
     Get all available market symbols organized by category.
 
     Returns commodities, currencies, ETFs, volatility, and bonds.
+
+    Note: intentionally typed as ``dict`` — the payload is a nested,
+    category-keyed catalog whose shape is defined by config, not a flat record.
     """
     return {
         "symbols": SYMBOLS,
@@ -88,7 +84,11 @@ def list_symbols():
 
 @router.get("/symbols/flat", response_model=list[dict])
 def list_symbols_flat():
-    """Get all symbols as a flat list with metadata."""
+    """Get all symbols as a flat list with metadata.
+
+    Note: intentionally typed as ``dict`` — each item is the raw symbol-info
+    record from config, whose keys are not a fixed API contract.
+    """
     result = []
     for symbol in get_all_symbols():
         info = get_symbol_info(symbol)
@@ -100,8 +100,7 @@ def list_symbols_flat():
 @router.get("/{symbol}", response_model=list[MarketDataResponse])
 def get_symbol_data(
     symbol: str,
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     limit: int = Query(365, ge=1, le=10000),
     db: Session = Depends(get_db),
 ):
@@ -112,10 +111,7 @@ def get_symbol_data(
     - Get oil prices: `/api/market/CL=F`
     - Get gold last 90 days: `/api/market/GC=F?start_date=2024-01-01`
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     data = db.query(MarketData).filter(
         MarketData.symbol == symbol,
@@ -151,11 +147,10 @@ def get_latest_price(
     return data
 
 
-@router.get("/{symbol}/returns", response_model=list[dict])
+@router.get("/{symbol}/returns", response_model=list[ReturnPointResponse])
 def get_symbol_returns(
     symbol: str,
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(90)),
     db: Session = Depends(get_db),
 ):
     """
@@ -163,10 +158,7 @@ def get_symbol_returns(
 
     Returns date and daily_return (as percentage).
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=90)
+    start_date, end_date = dates
 
     data = db.query(
         MarketData.date,
@@ -182,16 +174,15 @@ def get_symbol_returns(
         raise HTTPException(status_code=404, detail=f"No return data for '{symbol}'")
 
     return [
-        {"date": d.date, "return_pct": d.daily_return * 100}
+        ReturnPointResponse(date=d.date, return_pct=d.daily_return * 100)
         for d in data
     ]
 
 
-@router.get("/{symbol}/stats", response_model=dict)
+@router.get("/{symbol}/stats", response_model=SymbolStatsResponse)
 def get_symbol_stats(
     symbol: str,
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(90)),
     db: Session = Depends(get_db),
 ):
     """
@@ -199,10 +190,7 @@ def get_symbol_stats(
 
     Returns mean return, volatility, min, max, and count.
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=90)
+    start_date, end_date = dates
 
     stats = db.query(
         func.count(MarketData.id).label("count"),
@@ -223,26 +211,25 @@ def get_symbol_stats(
     # Get symbol info
     info = get_symbol_info(symbol)
 
-    return {
-        "symbol": symbol,
-        "name": info["name"] if info else symbol,
-        "category": info["category"] if info else "unknown",
-        "start_date": start_date,
-        "end_date": end_date,
-        "data_points": stats.count,
-        "mean_daily_return_pct": float(stats.mean_return) * 100 if stats.mean_return else None,
-        "min_return_pct": float(stats.min_return) * 100 if stats.min_return else None,
-        "max_return_pct": float(stats.max_return) * 100 if stats.max_return else None,
-        "min_price": float(stats.min_price) if stats.min_price else None,
-        "max_price": float(stats.max_price) if stats.max_price else None,
-    }
+    return SymbolStatsResponse(
+        symbol=symbol,
+        name=info["name"] if info else symbol,
+        category=info["category"] if info else "unknown",
+        start_date=start_date,
+        end_date=end_date,
+        data_points=stats.count,
+        mean_daily_return_pct=float(stats.mean_return) * 100 if stats.mean_return else None,
+        min_return_pct=float(stats.min_return) * 100 if stats.min_return else None,
+        max_return_pct=float(stats.max_return) * 100 if stats.max_return else None,
+        min_price=float(stats.min_price) if stats.min_price else None,
+        max_price=float(stats.max_price) if stats.max_price else None,
+    )
 
 
 @router.get("/{symbol}/with-events", response_model=list[dict])
 def get_symbol_with_events(
     symbol: str,
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(180)),
     min_mentions: int = Query(5, ge=0, description="Min mentions to include event"),
     db: Session = Depends(get_db),
 ):
@@ -251,11 +238,11 @@ def get_symbol_with_events(
 
     Powers the Event Timeline chart (price line + event scatter overlay).
     Each row contains market data plus event aggregates for that day.
+
+    Note: intentionally typed as ``dict`` — each row is a dynamic merge of
+    market fields with optional per-day event aggregates and a top event.
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=180)
+    start_date, end_date = dates
 
     # Fetch market data
     market_rows = db.query(MarketData).filter(

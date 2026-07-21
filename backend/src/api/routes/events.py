@@ -11,33 +11,32 @@ USAGE:
     GET /api/events/types - Get event counts by type
 """
 
-from datetime import date, timedelta
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from sqlalchemy import case
 
-from src.db.connection import get_session
+from src.api.deps import get_db, DateRange
 from src.db.models import Event
 from src.config.constants import EVENT_GROUPS, CAMEO_CATEGORIES, get_event_group, fips_to_iso
-from src.api.schemas import EventResponse, EventQuery
+from src.api.schemas import (
+    EventResponse,
+    EventCountResponse,
+    CountryEventCountResponse,
+    EventTypeCountResponse,
+    EventMapResponse,
+)
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
 
-def get_db():
-    """Dependency to get database session."""
-    with get_session() as session:
-        yield session
-
-
 @router.get("", response_model=list[EventResponse])
 def list_events(
-    start_date: date | None = Query(None, description="Filter from date"),
-    end_date: date | None = Query(None, description="Filter to date"),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     country_code: str | None = Query(None, description="3-letter ISO country code", max_length=3),
-    event_root_codes: str | None = Query(None, description="Comma-separated CAMEO codes (e.g., '18,19,20')"),
+    event_root_codes: list[str] | None = Query(None, description="CAMEO root codes; repeat to pass multiple (e.g. ?event_root_codes=18&event_root_codes=19)"),
     event_group: str | None = Query(None, description="Event group: violent_conflict, material_conflict, etc."),
     min_goldstein: float | None = Query(None, description="Minimum absolute Goldstein score"),
     min_mentions: int | None = Query(None, description="Minimum media mentions"),
@@ -53,11 +52,7 @@ def list_events(
     - Get events in Russia: `?country_code=RUS`
     - Get high-impact events: `?min_goldstein=5&min_mentions=20`
     """
-    # Default date range if not specified
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     query = db.query(Event).filter(
         Event.event_date >= start_date,
@@ -74,8 +69,7 @@ def list_events(
 
     # Filter by event codes
     if event_root_codes:
-        codes = [c.strip() for c in event_root_codes.split(",")]
-        query = query.filter(Event.event_root_code.in_(codes))
+        query = query.filter(Event.event_root_code.in_(event_root_codes))
     elif event_group:
         # Map group to codes
         codes = EVENT_GROUPS.get(event_group, [])
@@ -99,38 +93,30 @@ def list_events(
     return events
 
 
-@router.get("/count", response_model=dict)
+@router.get("/count", response_model=EventCountResponse)
 def count_events(
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     db: Session = Depends(get_db),
 ):
     """Get total count of events in date range."""
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     count = db.query(func.count(Event.id)).filter(
         Event.event_date >= start_date,
         Event.event_date <= end_date,
     ).scalar()
 
-    return {"count": count, "start_date": start_date, "end_date": end_date}
+    return EventCountResponse(count=count or 0, start_date=start_date, end_date=end_date)
 
 
-@router.get("/by-country", response_model=list[dict])
+@router.get("/by-country", response_model=list[CountryEventCountResponse])
 def events_by_country(
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """Get event counts grouped by country."""
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     results = db.query(
         Event.action_geo_country_code,
@@ -148,26 +134,22 @@ def events_by_country(
     ).limit(limit).all()
 
     return [
-        {
-            "country_code": r[0],
-            "count": r[1],
-            "avg_goldstein": round(float(r[2]), 2) if r[2] is not None else None,
-        }
+        CountryEventCountResponse(
+            country_code=r[0],
+            count=r[1],
+            avg_goldstein=round(float(r[2]), 2) if r[2] is not None else None,
+        )
         for r in results
     ]
 
 
-@router.get("/by-type", response_model=list[dict])
+@router.get("/by-type", response_model=list[EventTypeCountResponse])
 def events_by_type(
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     db: Session = Depends(get_db),
 ):
     """Get event counts grouped by CAMEO type."""
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     results = db.query(
         Event.event_root_code,
@@ -182,20 +164,19 @@ def events_by_type(
     ).all()
 
     return [
-        {
-            "code": r[0],
-            "name": CAMEO_CATEGORIES.get(str(r[0]).zfill(2), "Unknown"),
-            "group": get_event_group(r[0]),
-            "count": r[1],
-        }
+        EventTypeCountResponse(
+            code=str(r[0]),
+            name=CAMEO_CATEGORIES.get(str(r[0]).zfill(2), "Unknown"),
+            group=get_event_group(r[0]),
+            count=r[1],
+        )
         for r in results
     ]
 
 
-@router.get("/map", response_model=list[dict])
+@router.get("/map", response_model=list[EventMapResponse])
 def events_for_map(
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    dates: tuple[date, date] = Depends(DateRange(365)),
     event_group: str | None = Query(None, description="Filter by event group"),
     min_mentions: int | None = Query(None, description="Minimum media mentions"),
     db: Session = Depends(get_db),
@@ -206,10 +187,7 @@ def events_for_map(
     Returns ISO_A3 country_code, event counts by group, avg Goldstein,
     and total mentions. Uses SQL aggregation for performance.
     """
-    if not end_date:
-        end_date = date.today()
-    if not start_date:
-        start_date = end_date - timedelta(days=365)
+    start_date, end_date = dates
 
     # Conflict = codes 14-20, Cooperation = codes 01-08
     conflict_codes = EVENT_GROUPS["material_conflict"] + EVENT_GROUPS["violent_conflict"]
@@ -248,18 +226,19 @@ def events_for_map(
     if not rows:
         return []
 
-    results = []
-    for r in rows:
-        results.append({
-            "country_code": fips_to_iso(r.fips_code),
-            "event_count": r.event_count,
-            "avg_goldstein": round(float(r.avg_goldstein), 2) if r.avg_goldstein else 0,
-            "total_mentions": int(r.total_mentions or 0),
-            "conflict_count": int(r.conflict_count or 0),
-            "cooperation_count": int(r.cooperation_count or 0),
-        })
+    results = [
+        EventMapResponse(
+            country_code=fips_to_iso(r.fips_code),
+            event_count=r.event_count,
+            avg_goldstein=round(float(r.avg_goldstein), 2) if r.avg_goldstein else 0,
+            total_mentions=int(r.total_mentions or 0),
+            conflict_count=int(r.conflict_count or 0),
+            cooperation_count=int(r.cooperation_count or 0),
+        )
+        for r in rows
+    ]
 
-    results.sort(key=lambda x: x["event_count"], reverse=True)
+    results.sort(key=lambda x: x.event_count, reverse=True)
     return results
 
 

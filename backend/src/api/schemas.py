@@ -68,19 +68,6 @@ class EventResponse(EventBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class EventQuery(BaseModel):
-    """Query parameters for filtering events."""
-    start_date: date | None = Field(None, description="Filter events from this date")
-    end_date: date | None = Field(None, description="Filter events until this date")
-    country_code: str | None = Field(None, description="3-letter ISO country code", max_length=3)
-    event_root_codes: list[str] | None = Field(None, description="CAMEO root codes (01-20)")
-    event_group: str | None = Field(None, description="Event group: verbal_cooperation, material_cooperation, verbal_conflict, material_conflict, violent_conflict")
-    min_goldstein: float | None = Field(None, description="Minimum absolute Goldstein score")
-    min_mentions: int | None = Field(None, description="Minimum number of mentions")
-    limit: int = Field(100, ge=1, le=1000, description="Maximum results to return")
-    offset: int = Field(0, ge=0, description="Number of results to skip")
-
-
 # =============================================================================
 # MARKET DATA SCHEMAS
 # =============================================================================
@@ -106,16 +93,6 @@ class MarketDataResponse(MarketDataBase):
     updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class MarketDataQuery(BaseModel):
-    """Query parameters for market data."""
-    symbol: str | None = Field(None, description="Market symbol (e.g., CL=F, SPY)")
-    symbols: list[str] | None = Field(None, description="Multiple symbols")
-    start_date: date | None = Field(None, description="Start date")
-    end_date: date | None = Field(None, description="End date")
-    limit: int = Field(1000, ge=1, le=10000, description="Maximum results")
-    offset: int = Field(0, ge=0, description="Number of results to skip")
 
 
 # =============================================================================
@@ -155,19 +132,6 @@ class AnalysisResultResponse(BaseModel):
     model_version: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class AnalysisQuery(BaseModel):
-    """Query parameters for analysis results."""
-    event_id: int | None = Field(None, description="Filter by event ID")
-    symbol: str | None = Field(None, description="Filter by symbol")
-    analysis_type: str | None = Field(None, description="event_study or anomaly_detection")
-    is_significant: bool | None = Field(None, description="Only significant results")
-    is_anomaly: bool | None = Field(None, description="Only anomalies")
-    anomaly_type: str | None = Field(None, description="unexplained_move, muted_response, etc.")
-    min_car: float | None = Field(None, description="Minimum absolute CAR")
-    limit: int = Field(100, ge=1, le=1000)
-    offset: int = Field(0, ge=0)
 
 
 class AnomalyResponse(BaseModel):
@@ -441,3 +405,127 @@ class PredictionMoverResponse(BaseModel):
     abs_change: float
     snapshot_date: date
     previous_date: date
+
+
+# =============================================================================
+# EVENT AGGREGATE SCHEMAS (typed replacements for former dict responses)
+# =============================================================================
+
+class EventCountResponse(BaseModel):
+    """Total event count for a date range."""
+    count: int
+    start_date: date
+    end_date: date
+
+
+class CountryEventCountResponse(BaseModel):
+    """Event count and average Goldstein score for a single country."""
+    country_code: str
+    count: int
+    avg_goldstein: float | None = None
+
+
+class EventTypeCountResponse(BaseModel):
+    """Event count for a single CAMEO type."""
+    code: str
+    name: str
+    group: str
+    count: int
+
+
+class EventMapResponse(BaseModel):
+    """Per-country event aggregates for the world-map visualization."""
+    country_code: str
+    event_count: int
+    avg_goldstein: float
+    total_mentions: int
+    conflict_count: int
+    cooperation_count: int
+
+
+# =============================================================================
+# MARKET AGGREGATE SCHEMAS
+# =============================================================================
+
+class ReturnPointResponse(BaseModel):
+    """A single (date, return) point for a symbol's return series."""
+    date: date
+    return_pct: float
+
+
+class SymbolStatsResponse(BaseModel):
+    """Summary statistics for a symbol over a date range."""
+    symbol: str
+    name: str
+    category: str
+    start_date: date
+    end_date: date
+    data_points: int
+    mean_daily_return_pct: float | None = None
+    min_return_pct: float | None = None
+    max_return_pct: float | None = None
+    min_price: float | None = None
+    max_price: float | None = None
+
+
+# =============================================================================
+# ANALYSIS LIST SCHEMAS
+# =============================================================================
+
+class AnomalyListItem(BaseModel):
+    """A detected anomaly joined with its underlying event."""
+    id: int
+    event_id: int
+    event_date: date
+    event_type: str
+    event_group: str
+    symbol: str
+    anomaly_type: str | None = None
+    anomaly_score: float | None = None
+    expected_return: float | None = None
+    actual_return: float | None = None
+    goldstein_scale: float | None = None
+    actor1: str | None = None
+    actor2: str | None = None
+
+
+class SignificantResultItem(BaseModel):
+    """A statistically significant event-study result joined with its event."""
+    event_id: int
+    event_date: date
+    event_type: str
+    symbol: str
+    car_pct: float
+    t_stat: float | None = None
+    p_value: float | None = None
+    goldstein_scale: float | None = None
+    num_mentions: int | None = None
+
+
+class AnalysisSummaryResponse(BaseModel):
+    """Aggregate counts across all analysis results."""
+    total_results: int
+    significant_results: int
+    significance_rate: float
+    total_anomalies: int
+    anomaly_breakdown: dict[str, int]
+
+
+# =============================================================================
+# ROLLING CORRELATION SCHEMAS
+# =============================================================================
+
+class RollingCorrelationPoint(BaseModel):
+    """One point in a rolling-correlation time series."""
+    date: str
+    correlation: float
+    upper_ci: float
+    lower_ci: float
+
+
+class RollingCorrelationResponse(BaseModel):
+    """Rolling-window correlation between an event metric and returns."""
+    symbol: str
+    event_metric: str
+    window_days: int
+    data: list[RollingCorrelationPoint]

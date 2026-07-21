@@ -101,7 +101,7 @@ def get_model_summary(
 
     if summary is None:
         raise HTTPException(
-            status_code=422,
+            status_code=404,
             detail=f"Insufficient data to build legacy model for {symbol}",
         )
 
@@ -196,7 +196,7 @@ def _predict_with_legacy(request: LogisticPredictionRequest) -> dict:
 
     if result is None:
         raise HTTPException(
-            status_code=422,
+            status_code=404,
             detail=f"Insufficient training data for {request.symbol}",
         )
 

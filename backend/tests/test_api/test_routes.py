@@ -39,7 +39,7 @@ class TestAnalysisRoutes:
         response = client.get("/health")
         assert response.status_code == 200
 
-    @patch("src.api.routes.analysis.get_session")
+    @patch("src.api.deps.get_session")
     def test_get_results_endpoint(self, mock_session, client):
         """GET /api/analysis/results should return list."""
         session = MagicMock()
@@ -53,7 +53,7 @@ class TestAnalysisRoutes:
         response = client.get("/api/analysis/results")
         assert response.status_code == 200
 
-    @patch("src.api.routes.analysis.get_session")
+    @patch("src.api.deps.get_session")
     def test_get_anomalies_endpoint(self, mock_session, client):
         """GET /api/analysis/anomalies should return list."""
         session = MagicMock()
